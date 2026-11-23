@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers/Providers";
 import { OfflineServiceWorker } from "@/components/providers/OfflineServiceWorker";
 import { SkipLink } from "@/components/layout/SkipLink";
+import { LANGUAGE_INIT_SCRIPT } from "@/lib/i18n/languagePreference";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -29,7 +30,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" dir="ltr" className={`${manrope.variable} h-full`}>
+    // suppressHydrationWarning: LANGUAGE_INIT_SCRIPT sets lang/dir before React hydrates (#291)
+    <html lang="en" dir="ltr" className={`${manrope.variable} h-full`} suppressHydrationWarning>
+      <head>
+        {/* Apply the stored language and text direction before page content renders (#291) */}
+        <script dangerouslySetInnerHTML={{ __html: LANGUAGE_INIT_SCRIPT }} />
+      </head>
       <body className="font-sans antialiased bg-white dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300 h-full">
         <SkipLink />
         <Providers>{children}</Providers>

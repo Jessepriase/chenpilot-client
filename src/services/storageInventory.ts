@@ -117,6 +117,15 @@ export const STORAGE_INVENTORY: readonly StorageKeyInfo[] = [
     contents: 'light | dark',
   },
   {
+    key: 'language_by_user',
+    area: 'localStorage',
+    owner: 'src/lib/i18n/languagePreference.ts',
+    lifetime: 'Persistent device preference',
+    userScoped: false,
+    sensitivity: 'preference',
+    contents: 'Map of user id to chosen UI language, so each user keeps their own (#291)',
+  },
+  {
     key: 'language',
     area: 'localStorage',
     owner: 'src/store/slices/uiSlice.ts, src/lib/i18n/i18n.ts',

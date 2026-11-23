@@ -6,6 +6,13 @@ import {
   getLocaleForLanguage,
 } from './translations';
 
+import {
+  readActiveUserId,
+  readLanguagePreference,
+  saveLanguagePreference,
+  type PreferredLanguage,
+} from './languagePreference';
+
 export { Language, LANGUAGES, LANGUAGE_TO_LOCALE, getLocaleForLanguage };
 
 export function getLanguageDirection(lang: Language): 'ltr' | 'rtl' {
@@ -57,17 +64,12 @@ export function translateValidation(lang: Language, message: string | undefined)
   return key ? t(lang, `validation.${key}`) : message;
 }
 
+/** Stored language for the current user / device (#291). */
 export function getStoredLanguage(): Language {
   if (typeof window === 'undefined') return 'en';
-  const stored = localStorage.getItem('language');
-  if (stored && translations[stored as Language]) {
-    return stored as Language;
-  }
-  return 'en';
+  return readLanguagePreference(readActiveUserId()) as Language;
 }
 
 export function setStoredLanguage(lang: Language): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('language', lang);
-  }
+  if (typeof window !== 'undefined') saveLanguagePreference(lang as PreferredLanguage, readActiveUserId());
 }

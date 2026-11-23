@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction, createAction } from "@reduxjs/toolkit";
 import { readStoredTheme, writeStoredTheme } from "@/lib/themeStorage";
+import { readActiveUserId, readLanguagePreference, saveLanguagePreference } from "@/lib/i18n/languagePreference";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface RetryStatus {
@@ -20,7 +21,8 @@ export interface ThemeState {
 
 const initialState: ThemeState = {
   mode: "dark", // Default to dark mode
-  language: "en", // Default to English
+  // Stored preference, applied before render (#291)
+  language: typeof window !== "undefined" ? readLanguagePreference(readActiveUserId()) : "en",
   retryStatus: null,
   sidebarOpen: false,
   notifications: [],
@@ -33,10 +35,9 @@ export const initializeUI = createAction("ui/initialize", () => {
   // Validated: only "light"/"dark" are used (#297)
   const savedTheme = typeof window !== "undefined" ? readStoredTheme() : null;
 
+  // Validated per-user / device language preference (#291)
   const savedLanguage =
-    typeof window !== "undefined"
-      ? (localStorage.getItem("language") as "en" | "ar" | "es" | "fr" | null)
-      : null;
+    typeof window !== "undefined" ? readLanguagePreference(readActiveUserId()) : null;
 
   return {
     payload: {
@@ -64,10 +65,12 @@ export const uiSlice = createSlice({
     },
     setLanguage: (state, action: PayloadAction<"en" | "ar" | "es" | "fr">) => {
       state.language = action.payload;
-      // Save to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem("language", state.language);
-      }
+      // Saved for the signed-in user, or as the device preference when signed out (#291)
+      if (typeof window !== "undefined") saveLanguagePreference(action.payload, readActiveUserId());
+    },
+    /** Switch language without saving it (e.g. restoring a user's choice at sign-in) (#291). */
+    applyLanguage: (state, action: PayloadAction<"en" | "ar" | "es" | "fr">) => {
+      state.language = action.payload;
     },
     /**
      * Called by the retry interceptor before each retry attempt.
@@ -96,6 +99,7 @@ export const {
   toggleTheme,
   setTheme,
   setLanguage,
+  applyLanguage,
   setRetryStatus,
   clearRetryStatus,
 } =
