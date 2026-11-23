@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { setTheme } from "@/store/slices/uiSlice";
+import { readStoredTheme } from "@/lib/themeStorage";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const dispatch = useAppDispatch();
@@ -15,10 +16,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const initTheme = () => {
       if (typeof window === "undefined") return;
 
-      const savedTheme = localStorage.getItem("theme") as
-        | "light"
-        | "dark"
-        | null;
+      // Only "light"/"dark" are accepted; invalid or unreadable values fall back to the system (#297)
+      const savedTheme = readStoredTheme();
 
       if (savedTheme) {
         dispatch(setTheme(savedTheme));
@@ -37,7 +36,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (e: MediaQueryListEvent) => {
       // Only apply if no saved preference
-      if (!localStorage.getItem("theme")) {
+      if (!readStoredTheme()) {
         dispatch(setTheme(e.matches ? "dark" : "light"));
       }
     };

@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction, createAction } from "@reduxjs/toolkit";
+import { readStoredTheme, writeStoredTheme } from "@/lib/themeStorage";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface RetryStatus {
@@ -29,10 +30,8 @@ const initialState: ThemeState = {
 // Create action for initialization
 export const initializeUI = createAction("ui/initialize", () => {
   // Get theme and language from localStorage or use defaults
-  const savedTheme =
-    typeof window !== "undefined"
-      ? (localStorage.getItem("theme") as "light" | "dark" | null)
-      : null;
+  // Validated: only "light"/"dark" are used (#297)
+  const savedTheme = typeof window !== "undefined" ? readStoredTheme() : null;
 
   const savedLanguage =
     typeof window !== "undefined"
@@ -56,16 +55,12 @@ export const uiSlice = createSlice({
     toggleTheme: (state) => {
       state.mode = state.mode === "light" ? "dark" : "light";
       // Save to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem("theme", state.mode);
-      }
+      if (typeof window !== "undefined") writeStoredTheme(state.mode);
     },
     setTheme: (state, action: PayloadAction<"light" | "dark">) => {
       state.mode = action.payload;
       // Save to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem("theme", state.mode);
-      }
+      if (typeof window !== "undefined") writeStoredTheme(state.mode);
     },
     setLanguage: (state, action: PayloadAction<"en" | "ar" | "es" | "fr">) => {
       state.language = action.payload;
