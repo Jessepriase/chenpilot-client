@@ -1,13 +1,3 @@
-export type SocketConnectionState =
-  | 'idle'
-  | 'connecting'
-  | 'connected'
-  | 'reconnecting'
-  | 'disconnected'
-  | 'exhausted'
-  | 'failed';
-
-
 /**
  * The single shared model for real-time socket connection status (#279).
  *
