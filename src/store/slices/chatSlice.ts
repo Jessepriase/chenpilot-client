@@ -201,6 +201,14 @@ export const sortMessagesChronologically = (messages: ChatMessage[]): ChatMessag
 /**
  * Merge server messages into the local list by message id; the server copy wins (#265).
  */
+/** Queued offline messages older than this are dropped instead of replayed (#290). */
+export const OFFLINE_QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
+
+export function isQueuedMessageExpired(msg: { timestamp?: string }, now: number = Date.now()): boolean {
+  const queuedAt = Date.parse(msg?.timestamp ?? '');
+  return Number.isNaN(queuedAt) || now - queuedAt > OFFLINE_QUEUE_TTL_MS;
+}
+
 export const mergeMessagesById = (existing: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] => {
   const byId = new Map<string, ChatMessage>();
   for (const message of existing) byId.set(message.id, message);
@@ -1084,6 +1092,8 @@ const chatSlice = createSlice({
       state,
       action: PayloadAction<{ id: string; query: string }>,
     ) => {
+      // The same queued message delivered twice (e.g. a repeated event) is kept once (#290)
+      if (state.messageQueue.some((msg) => msg.id === action.payload.id)) return;
       state.messageQueue.push({
         id: action.payload.id,
         query: action.payload.query,
@@ -1134,7 +1144,12 @@ const chatSlice = createSlice({
           try {
             const parsed = JSON.parse(savedQueue);
             if (Array.isArray(parsed)) {
-              state.messageQueue = parsed;
+              // Drop entries older than OFFLINE_QUEUE_TTL_MS so stale prompts are never replayed (#290)
+              const fresh = parsed.filter((msg) => !isQueuedMessageExpired(msg));
+              state.messageQueue = fresh;
+              if (fresh.length !== parsed.length) {
+                persistOfflineStorage("messageQueue", fresh, "queued message");
+              }
             } else {
               // Unexpected schema (e.g. object from a schema change) — clear only this key.
               logger.warn('[loadMessageQueue] Unexpected schema in localStorage key "messageQueue"; clearing key and recovering to empty queue.');

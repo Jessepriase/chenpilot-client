@@ -220,3 +220,12 @@ Deleting a conversation while an agent reply is pending must not let that reply 
 - Code that later applies server or socket messages to a conversation should check `isConversationDeleted(conversationId)` first.
 
 Tests: `src/store/__tests__/conversationRequests.test.ts`, `src/store/slices/__tests__/chatSlice.deletion.test.ts` and `src/components/chat/DeleteConversationDialog.test.tsx`.
+
+## Offline Queue Replay Rules (#290)
+
+- **Reload:** the queue is persisted in `localStorage["messageQueue"]` and restored with `loadMessageQueue()`, keeping the original order.
+- **Replay order:** on reconnect, `useOfflineQueue` sends entries one at a time in queue order, each with its queued id as `tempId`, so the same row is updated.
+- **Duplicates:** `queueMessage` ignores an id that is already queued. `processQueue` won't start a second replay while one is running, so repeated online events can't send a message twice.
+- **Expiry:** entries older than 24 hours (`OFFLINE_QUEUE_TTL_MS`), or with an invalid timestamp, are dropped when the queue is restored and skipped during replay.
+- **Permanent failure:** a send that fails is removed from the automatic queue. The message is marked failed with a Retry action, and replay continues with the next entry.
+- **Tests:** `chatSlice.offlineQueue.test.ts` and `useOfflineQueue.test.tsx` use `blockRealNetwork()` (`src/test/networkGuard.ts`) and assert that no real request is made.
