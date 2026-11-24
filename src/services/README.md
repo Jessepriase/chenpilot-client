@@ -80,6 +80,24 @@ Every subscription pattern has explicit cleanup responsibilities to prevent dupl
   - `retry()` resets `reconnectAttempt` to `0`, transitions to `connecting`, and reconnects the existing socket (or calls `connect()` if none exists).
   - `disconnect()` closes the socket, clears the socket reference, and transitions to `disconnected`.
 
+### Connection Diagnostics (#540)
+
+`SocketProvider` exposes `reconnectAttempt` and `maxReconnectAttempts` alongside
+`connectionState`. `SocketStatusIndicator` renders them through the pure helpers in
+`src/components/status/socketDiagnostics.ts`:
+
+- The displayed attempt is clamped to `1…maxReconnectAttempts` and never above
+  `RECONNECT_POLICY.maxAttemptsCap` (20), so an unexpected count cannot imply
+  unlimited retries.
+- The count is shown only for `reconnecting` and `exhausted`. A `connect` event
+  resets the manager's attempt to `0` and the state to `connected`, which removes
+  the diagnostic immediately; manual `retry()` does the same.
+- The helpers accept only the state and two numbers. Tokens, auth payloads, socket
+  ids and error text never enter diagnostics.
+
+Tests: `src/components/status/socketDiagnostics.test.ts` and
+`src/components/status/SocketStatusIndicator.test.tsx`.
+
 ### Outbound Emit & Queueing Semantics
 
 - `SocketManager.emit(event, data)` checks `if (this.socket && this.socket.connected)`.
