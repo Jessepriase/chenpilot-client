@@ -17,6 +17,7 @@ import toast from "react-hot-toast";
 import { isTerminalAuthError, useClearPasswordOnLeave } from "@/components/auth/passwordHygiene";
 import { authService, toAuthPayload } from "@/services/auth.service";
 import { useT } from "@/lib/i18n/useT";
+import { LiveAnnouncer, SILENT_TOAST, type Announcement } from "@/components/ui/LiveAnnouncer";
 
 interface RegisterFormData {
   email: string;
@@ -30,6 +31,7 @@ export function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false);
   // Translated workflow strings (#292)
   const { t, tv } = useT();
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
   const {
     register,
@@ -49,6 +51,7 @@ export function RegisterForm() {
   const passwordValue = watch("password") ?? "";
 
   const onSubmit = async (data: RegisterFormData) => {
+    setAnnouncement({ text: "Creating account…", tone: "polite" });
     try {
       // Same email normalization as login; the password is sent exactly as typed (#259)
       const cleanData = toAuthPayload({
@@ -57,14 +60,17 @@ export function RegisterForm() {
         name: data.name ? String(data.name) : undefined,
       });
       await dispatch(registerUser(cleanData)).unwrap();
-      toast.success(t("auth.registerSuccess"));
+      toast.success(t("auth.registerSuccess"), SILENT_TOAST);
+      setAnnouncement({ text: "Account created.", tone: "polite" });
       router.push("/chat");
     } catch (error: unknown) {
       // Privacy-safe: the toast is always the generic message. Server field errors are attached
       // to inputs only when they can't reveal whether an account exists (e.g. password rules) (#258).
       // Name and email are kept; terminal failures clear and refocus the password, transient ones
       // keep it for an easy resubmit (#253).
-      toast.error(authService.normalizeRegisterError(error));
+      const message = authService.normalizeRegisterError(error);
+      toast.error(message, SILENT_TOAST);
+      setAnnouncement({ text: message, tone: "assertive" });
       applyAuthErrors(error, REGISTER_FIELDS, setError, [data.password], { hideAccountExistence: true });
       if (isTerminalAuthError(error)) {
         setValue("password", "");
@@ -89,6 +95,8 @@ export function RegisterForm() {
         </p>
       </div>
 
+      {/* Announces registration progress and outcome once; the toasts are silent to screen readers (#307) */}
+      <LiveAnnouncer announcement={announcement} />
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="space-y-6">
         <div>
           <label

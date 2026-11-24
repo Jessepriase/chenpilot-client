@@ -15,6 +15,7 @@ import toast from "react-hot-toast";
 import { isTerminalAuthError, useClearPasswordOnLeave } from "@/components/auth/passwordHygiene";
 import { authService, toAuthPayload } from "@/services/auth.service";
 import { useT } from "@/lib/i18n/useT";
+import { LiveAnnouncer, SILENT_TOAST, type Announcement } from "@/components/ui/LiveAnnouncer";
 
 interface LoginFormData {
   email: string;
@@ -28,6 +29,7 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   // Translated workflow strings (#292)
   const { t, tv } = useT();
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
   const {
     register,
@@ -43,10 +45,12 @@ export default function LoginForm() {
   useClearPasswordOnLeave(() => setValue("password", ""));
 
   const onSubmit = async (data: LoginFormData) => {
+    setAnnouncement({ text: "Signing in…", tone: "polite" });
     try {
       // Send the normalized email; the field keeps what the user typed (#259)
       await dispatch(login(toAuthPayload(data))).unwrap();
-      toast.success(t("auth.loginSuccess"));
+      toast.success(t("auth.loginSuccess"), SILENT_TOAST);
+      setAnnouncement({ text: "Signed in.", tone: "polite" });
       router.push("/chat");
     } catch (error: unknown) {
       // Privacy-safe (account-enumeration resistance): every login failure shows the same
@@ -54,7 +58,9 @@ export default function LoginForm() {
       // account exists (#258). The email is kept. Terminal failures (wrong credentials,
       // validation) clear and refocus the password; transient ones (network, 5xx) keep it so
       // the user can just resubmit (#253).
-      toast.error(authService.normalizeLoginError(error));
+      const message = authService.normalizeLoginError(error);
+      toast.error(message, SILENT_TOAST);
+      setAnnouncement({ text: message, tone: "assertive" });
       if (isTerminalAuthError(error)) {
         setValue("password", "");
         setFocus("password");
@@ -75,6 +81,8 @@ export default function LoginForm() {
 
       </div>
 
+      {/* Announces sign-in progress and outcome once; the toasts are silent to screen readers (#307) */}
+      <LiveAnnouncer announcement={announcement} />
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="space-y-6">
         <div>
           <label
