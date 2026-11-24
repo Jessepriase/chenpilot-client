@@ -37,6 +37,32 @@ Environment variables beginning with `NEXT_PUBLIC_` are browser-visible configur
 - The Google sign-in surface displays the caught error text. The liquidity widget displays generic inline errors (`Failed to fetch liquidity data` or `Error loading liquidity statistics`) rather than the backend message.
 - Login/register forms dispatch auth thunks; the backend response contract is documented in the Authentication Endpoints table below.
 
+### Error Codes Consumed by Wallet Screens (#544)
+
+Wallet, send and agent screens consume the codes below. "Automatic retry" means
+`src/utils/retryUtils.ts` may replay the request; agent `errorKind` retry is a
+separate user-driven decision (`isRetryableErrorKind`). No code in this table
+causes a state-changing payment to be replayed automatically: requests marked
+`paymentOperation` are never retried, even on `503`.
+
+| Code | Source and shape | Automatic retry | User-facing treatment | Verified by |
+| --- | --- | --- | --- | --- |
+| `REAUTH_REQUIRED` | `401`/`403` body code on sensitive account/settings actions, e.g. `{ "code": "REAUTH_REQUIRED", "maxAgeSeconds": 300 }` | No; the 401 refresh interceptor explicitly rethrows it | Password step-up prompt; local auth is not cleared and no logout redirect occurs | `walletErrorCodes.test.ts`, `reauth.test.ts` |
+| `protocol_error` | `200` from `POST /query` whose body fails `parseAgentEnvelope` | No; the request already succeeded at transport level | `result.success: false` with a generic "could not understand" message; never rendered as a successful answer | `walletErrorCodes.test.ts`, `agentEnvelope.test.ts` |
+| `timeout` | `ECONNABORTED`/`ETIMEDOUT`, a "timeout" message, or HTTP `408`/`504` | Yes for read-only requests; state-changing queries show **Check status** instead of a retry | "Taking longer than expected"; the user is warned the action may still be running | `walletErrorCodes.test.ts`, `agentServiceTimeout.test.ts` |
+| `network` | `ERR_NETWORK`, no HTTP response, or a "network" message | Yes on idempotent methods only | "Check your internet connection and try again" | `walletErrorCodes.test.ts` |
+| `server` | `429` or any `5xx` (including `503`) | Classification: yes. Transport replay: idempotent methods only, except `503` on any non-payment method | Generic unavailable copy; `503` health bodies may be reported as degraded rather than as a blank outage | `walletErrorCodes.test.ts`, `retryUtils.test.ts`, `agentServiceHealth.test.ts` |
+| `unknown` | Anything the classifier cannot categorize | Yes | Generic unavailable copy; no backend detail is shown | `walletErrorCodes.test.ts` |
+| `invalid_query` | Other `4xx`, or a message containing "invalid query" | No; the same prompt would fail again | "I didn't understand that…" rephrase prompt; no retry button | `walletErrorCodes.test.ts`, `agentServiceRetry.test.ts` |
+| `unauthenticated` | `401`/`403` from the agent, or "not authenticated" | No | "Please sign in again to continue"; no automatic logout for the agent path | `walletErrorCodes.test.ts` |
+| `not_found` | `200 { "status": "not_found" }` from `GET /query/{clientRequestId}/status` | State-changing queries are resent only after `not_found`, with the same `clientRequestId` | Treated as "the backend never saw this action" | `walletErrorCodes.test.ts`, `agentServiceRetry.test.ts` |
+| `completed` / `pending` | `200` status values from the same endpoint | No resend | The late result replaces the failed reply, or the user is asked to check again shortly | `walletErrorCodes.test.ts` |
+| `unknown` status | Missing/unreachable status endpoint | No resend without explicit user confirmation | Asks the user to check transaction history before "Retry anyway" | `walletErrorCodes.test.ts`, `agentServiceRetry.test.ts` |
+
+Transport codes `408`, `429` and `5xx` come from `RETRY_CONFIG.RETRYABLE_STATUS_CODES`;
+`401` is owned by the token-refresh interceptor, and contact `404` has its own
+wrapper contract under "Error Handling And User Messages" above.
+
 ## Privacy-Safe Authentication Errors (Account-Enumeration Resistance)
 
 Login and registration errors are normalized on the client before reaching the user.  `AuthService.normalizeLoginError` and `AuthService.normalizeRegisterError` collapse **all** backend failure reasons — including wrong password, user-not-found, email-already-taken, 401, and 409 responses — into a single generic message.  The raw backend message is written only to `console.error` (a redacted log) and is never surfaced in a toast, inline error, or any other UI element.
