@@ -36,6 +36,15 @@ describe("TransactionDetailPage", () => {
     expect(screen.getByText("Successful")).toBeInTheDocument();
   });
 
+  it("renders safe fallbacks when memo and amount are absent", async () => {
+    horizonFetch.mockReset()
+      .mockResolvedValueOnce(response({ ...transaction, memo: undefined, memo_type: undefined }))
+      .mockResolvedValueOnce(response({ _embedded: { records: [{ id: "op-2", type: "account_merge" }] } }));
+    render(<TransactionDetailPage />);
+    expect(await screen.findByText("No memo")).toBeInTheDocument();
+    expect(screen.getByText("Not available")).toBeInTheDocument();
+  });
+
   it("shows an explicit not-found state", async () => {
     horizonFetch.mockReset().mockResolvedValueOnce(response({}, 404));
     render(<TransactionDetailPage />);
