@@ -21,5 +21,7 @@ consumer reads that single `SocketConnectionState` union (#279).
   shows the offline message first.
 
 Tests: `src/types/socket.test.ts` (model and initial state),
-`src/components/providers/SocketProvider.test.tsx` (transitions), and
+`src/components/providers/SocketProvider.test.tsx` (transitions and listener
+cleanup on unmount), `src/services/__tests__/socketManager.test.ts` (state
+machine and handler registration), and
 `src/components/chat/OfflineIndicator.socket.test.tsx` (status UI).

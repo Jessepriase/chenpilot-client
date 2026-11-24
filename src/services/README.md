@@ -59,6 +59,19 @@ Every subscription pattern has explicit cleanup responsibilities to prevent dupl
 | `once(event, handler)` | **Auto on first fire / Caller on early unmount** | Return `() => { off(event, handler); }` from `useEffect` | Prevents the callback from firing after unmount if the event never arrived before teardown. |
 | `manager.onStateChange(listener)` / `manager.onResyncStateChange(listener)` | **Caller** | Invoke the returned `unsubscribe()` function on cleanup | `SocketProvider` and `useSocketResync` handle this automatically for their own subscriptions. |
 
+### Provider boundary (#541)
+
+`SocketProvider` also removes every handler registered through its context
+(`on` and `once`) before calling `manager.disconnect()` on unmount. This is a
+backstop for callers that forget their own `off()` cleanup: a socket event
+arriving after navigation cannot invoke a handler from an unmounted screen.
+Repeated mount/unmount cycles therefore cannot accumulate callbacks.
+
+The provider rebinds only when `configKey` or `autoConnect` changes; a new
+`config` object with the same key does not tear down live listeners. Tests:
+`src/components/providers/SocketProvider.test.tsx` and
+`src/services/__tests__/socketManager.test.ts`.
+
 ---
 
 ## Reconnection & Queueing Semantics
