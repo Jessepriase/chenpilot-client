@@ -1,8 +1,10 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useMemo } from 'react';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { getLanguageDirection, type Language } from '@/lib/i18n/i18n';
+import { applyLanguage } from '@/store/slices/uiSlice';
+import { readLanguagePreference } from '@/lib/i18n/languagePreference';
 
 export type TextDirection = 'ltr' | 'rtl';
 
@@ -23,7 +25,16 @@ export function useLanguageDirection(): LanguageDirectionContextValue {
 }
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const dispatch = useAppDispatch();
   const language = useAppSelector((state) => state.ui.language);
+  const userId = useAppSelector((state) => state.auth.user?.id ?? null);
+
+  // Signing in restores that user's saved language; signing out returns to the device
+  // preference, so one user's choice never carries over to another user (#291)
+  useEffect(() => {
+    dispatch(applyLanguage(readLanguagePreference(userId)));
+  }, [dispatch, userId]);
+
   const direction = getLanguageDirection(language);
 
   useEffect(() => {

@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction, createAction } from "@reduxjs/toolkit";
+import { readActiveUserId, readLanguagePreference, saveLanguagePreference } from "@/lib/i18n/languagePreference";
 import { readSavedTheme, saveTheme } from "@/lib/theme";
 import { readTranslationLanguage, saveTranslationLanguage, TranslationLanguage } from "@/lib/translation";
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -23,7 +24,8 @@ export interface ThemeState {
 
 const initialState: ThemeState = {
   mode: "dark", // Default to dark mode
-  language: "en", // Default to English
+  // Stored preference, applied before render (#291)
+  language: typeof window !== "undefined" ? readLanguagePreference(readActiveUserId()) : "en",
   translationLanguage: typeof window !== "undefined" ? readTranslationLanguage() : null,
   retryStatus: null,
   sidebarOpen: false,
@@ -34,12 +36,12 @@ const initialState: ThemeState = {
 // Create action for initialization
 export const initializeUI = createAction("ui/initialize", () => {
   // Get theme and language from localStorage or use defaults
+  // Validated: only "light"/"dark" are used (#297)
   const savedTheme = typeof window !== "undefined" ? readSavedTheme() : null;
 
+  // Validated per-user / device language preference (#291)
   const savedLanguage =
-    typeof window !== "undefined"
-      ? (localStorage.getItem("language") as "en" | "ar" | "es" | "fr" | null)
-      : null;
+    typeof window !== "undefined" ? readLanguagePreference(readActiveUserId()) : null;
 
   return {
     payload: {
@@ -76,10 +78,12 @@ export const uiSlice = createSlice({
     },
     setLanguage: (state, action: PayloadAction<"en" | "ar" | "es" | "fr">) => {
       state.language = action.payload;
-      // Save to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem("language", state.language);
-      }
+      // Saved for the signed-in user, or as the device preference when signed out (#291)
+      if (typeof window !== "undefined") saveLanguagePreference(action.payload, readActiveUserId());
+    },
+    /** Switch language without saving it (e.g. restoring a user's choice at sign-in) (#291). */
+    applyLanguage: (state, action: PayloadAction<"en" | "ar" | "es" | "fr">) => {
+      state.language = action.payload;
     },
     /**
      * Called by the retry interceptor before each retry attempt.
@@ -109,6 +113,7 @@ export const {
   setTheme,
   applyTheme,
   setLanguage,
+  applyLanguage,
   setTranslationLanguage,
   setRetryStatus,
   clearRetryStatus,
