@@ -640,3 +640,9 @@ For every `localStorage` key the client reads and parses:
 ### Backend integration note
 
 These recovery paths are entirely client-side and require no backend changes. The backend is not notified when a key is cleared. On the next successful login or registration the keys are rewritten with fresh values.
+
+### Offline replay idempotency
+
+Messages persisted in `messageQueue` are replayed after a reconnect. `POST /query` accepts a `clientRequestId` field, and replay uses a stable key derived from the queued row's id (`replay_<queue entry id>`) via `src/utils/offlineReplayIdempotency.ts`. Retrying the same queued row therefore sends the same id, allowing the backend to deduplicate instead of producing a second agent answer. `src/services/__tests__/agentIdempotencyContract.test.ts` verifies the field is present in the request body and stable across repeated deliveries.
+
+**Backend contract limitation.** The client can only *offer* a stable idempotency key. Duplicate-free replay is guaranteed only if the backend actually deduplicates `clientRequestId` for `POST /query`. Until that behaviour is confirmed, the client does not claim a duplicate-free replay: it surfaces `OFFLINE_REPLAY_DEDUP_NOTICE`, which explains that replies may appear twice when the backend does not honour the key. No silent duplication is presented as success.
