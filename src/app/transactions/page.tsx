@@ -22,7 +22,6 @@ import {
 import { Language } from "@/lib/i18n/i18n";
 import { RefreshCw, ReceiptText } from "lucide-react";
 import type { StellarTransaction } from "@/types";
-import TransactionDetailsDrawer from "@/components/dashboard/TransactionDetailsDrawer";
 import { LtrText } from "@/components/ui/LtrText";
 
 // ---------------------------------------------------------------------------
@@ -87,8 +86,6 @@ function formatLastUpdated(value: string | null): string | null {
 }
 
 export default function TransactionsPage() {
-  const [selectedTransaction, setSelectedTransaction] = useState<StellarTransaction | null>(null);
-  const selectedTriggerRef = useRef<HTMLElement | null>(null);
   const requestsControllerRef = useRef<AbortController | null>(null);
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
@@ -310,14 +307,12 @@ export default function TransactionsPage() {
               tabIndex={0}
               aria-label={`View details for transaction ${tx.hash.slice(0, 8)}`}
               onClick={(event) => {
-                selectedTriggerRef.current = event.currentTarget;
-                setSelectedTransaction(tx);
+                router.push(`/transactions/${encodeURIComponent(tx.hash)}`);
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  selectedTriggerRef.current = event.currentTarget;
-                  setSelectedTransaction(tx);
+                  router.push(`/transactions/${encodeURIComponent(tx.hash)}`);
                 }
               }}
               className="cursor-pointer rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -420,13 +415,6 @@ export default function TransactionsPage() {
                 {transactions.isLoadingMore ? "Loading..." : "Load older transactions"}
               </Button>
             </div>
-          )}
-          {selectedTransaction && (
-            <TransactionDetailsDrawer
-              transaction={selectedTransaction}
-              onClose={() => setSelectedTransaction(null)}
-              returnFocusRef={selectedTriggerRef}
-            />
           )}
         </div>
       )}
