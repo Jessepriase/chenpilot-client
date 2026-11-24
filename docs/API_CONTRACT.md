@@ -640,3 +640,18 @@ For every `localStorage` key the client reads and parses:
 ### Backend integration note
 
 These recovery paths are entirely client-side and require no backend changes. The backend is not notified when a key is cleared. On the next successful login or registration the keys are rewritten with fresh values.
+
+
+## Password Recovery Client Contract (#477)
+
+The client recovery journey uses the documented routes below; this repository does not contain evidence that the deployed backend currently implements them. Before release, verify both routes and their response semantics against the backend:
+
+- `POST /auth/forgot-password` accepts `{ email }`. The UI displays the same neutral confirmation whether the request succeeds or fails, preventing account enumeration.
+- `POST /auth/reset-password/{token}` accepts `{ password }`. The token is a one-time URL credential and is never written to local or session storage or logged by the recovery components.
+- The client treats only an explicit `success: true` response as completion. An unsuccessful response envelope is surfaced as a retryable/invalid-link state rather than a false success.
+- After confirmed completion, the browser URL is replaced without the token. The backend must enforce token authenticity, expiry, single use, rate limiting, and password policy; client validation is not an authorization boundary.
+- Backend owners must confirm whether invalid/expired tokens use 400, 401, 403, 404, 410, or 422. The UI maps the currently expected invalid-token statuses to a generic expired-link message and does not display raw server errors.
+
+## Transaction Detail Read Contract (#476)
+
+The dedicated transaction detail route reads the transaction and its operations through the existing Horizon proxy (`GET /horizon/transactions/{hash}` and `GET /horizon/transactions/{hash}/operations`). These are read-only Horizon resources, not new backend application endpoints. A missing transaction is rendered separately from proxy/service failures. Amounts and timestamps use the existing shared formatters; values not supplied by Horizon are not fabricated.
