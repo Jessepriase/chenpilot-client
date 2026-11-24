@@ -42,7 +42,7 @@ describe("TransactionDetailPage", () => {
       .mockResolvedValueOnce(response({ _embedded: { records: [{ id: "op-2", type: "account_merge" }] } }));
     render(<TransactionDetailPage />);
     expect(await screen.findByText("No memo")).toBeInTheDocument();
-    expect(screen.getByText("Not available")).toBeInTheDocument();
+    expect(screen.getAllByText("Not available")).toHaveLength(2);
   });
 
   it("shows an explicit not-found state", async () => {
