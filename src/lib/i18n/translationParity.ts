@@ -1,5 +1,3 @@
-import type { Language } from "./translations";
-
 export interface TranslationKeyMismatch {
   missing: string[];
   extra: string[];
