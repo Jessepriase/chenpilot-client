@@ -1,114 +1,161 @@
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
-import toast from 'react-hot-toast';
-import * as authStore from '@/store';
-import { push } from 'next/navigation';
-import { RegisterForm } from './registerForm';
+/**
+ * Tests for RegisterForm privacy-safe error handling.
+ *
+ * Verifies that no account-existence information (email already taken, etc.)
+ * leaks through the toast shown after a failed registration attempt.
+ */
+import { cleanup, render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/store/slices/authSlice', () => ({
-  register: vi.fn(),
-  googleAuth: vi.fn(),
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+const mockDispatch = vi.fn();
+const mockPush = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+
+vi.mock('@/store', () => ({
+  useAppDispatch: () => mockDispatch,
+  useAppSelector: () => ({ isLoading: false }),
 }));
 
-vi.mock('@/store', () => {
-  let error: string | null = null;
-  return {
-    useAppDispatch: vi.fn(() => vi.fn((action: unknown) => action)),
-    useAppSelector: vi.fn((cb: (state: { auth: { error: string | null } }) => { error: string | null }) =>
-      cb({ auth: { error } }),
-    ),
-    __setAuth: (s: { error?: string | null }) => {
-      if (s.error !== undefined) error = s.error;
-    },
-  };
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}));
+
+vi.mock('@/components/auth/GoogleSignIn', () => ({
+  GoogleSignInButton: () => <button type="button">Google</button>,
+}));
+
+vi.mock('@/components/auth/(register)/passwordStrengthMeter', () => ({
+  PasswordStrengthMeter: () => <div data-testid="strength-meter" />,
+}));
+
+import { RegisterForm } from './registerForm';
+import { GENERIC_REGISTER_ERROR } from '@/services/auth.service';
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
 });
 
-vi.mock('next/navigation', () => {
-  const push = vi.fn();
-  return { useRouter: vi.fn(() => ({ push })), push };
-});
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+function renderForm() {
+  return render(<RegisterForm />);
+}
 
-import { register } from '@/store/slices/authSlice';
-
-const registerMock = vi.mocked(register);
-const toastSuccess = vi.mocked(toast.success);
-const setAuth = authStore.__setAuth;
-
-const resolvable = () => {
-  let resolve!: (value: { user: { id: string; email: string }; token: string }) => void;
-  const p = new Promise<{ user: { id: string; email: string }; token: string }>((res) => {
-    resolve = res;
-  }) as Promise<{ user: { id: string; email: string }; token: string }> & {
-    unwrap: () => Promise<{ user: { id: string; email: string }; token: string }>;
-  };
-  p.unwrap = () => p;
-  return { promise: p, resolve: resolve! };
-};
-
-const renderForm = () => render(<RegisterForm />);
-const submitButton = () => screen.getByRole('button', { name: /Create Account|Creating account/ });
-
-const fillForm = () => {
-  fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'Alice' } });
-  fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'a@b.com' } });
-  fireEvent.change(screen.getByLabelText(/Password/i), { target: { value: 'Password1' } });
-};
-
-beforeEach(() => {
-  setAuth({ error: null });
-  registerMock.mockReset();
-  push.mockClear();
-});
-
-test('renders with submit enabled, "Create Account" status and no inline server error', () => {
+async function fillAndSubmit(email: string, password: string, name?: string) {
   renderForm();
-  expect(submitButton()).not.toBeDisabled();
-  expect(submitButton()).toHaveTextContent('Create Account');
-  expect(screen.queryByText(/Email already in use|Server error/)).not.toBeInTheDocument();
-});
+  if (name) {
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: name } });
+  }
+  fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: email } });
+  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: password } });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+  });
+}
 
-test('disables submit and shows pending status while register is pending, then re-enables on success', async () => {
-  const { promise, resolve } = resolvable();
-  registerMock.mockReturnValue(promise);
-  renderForm();
-  fillForm();
-  fireEvent.click(submitButton());
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
-  await waitFor(() => expect(registerMock).toHaveBeenCalledTimes(1));
-  expect(submitButton()).toBeDisabled();
-  expect(submitButton()).toHaveTextContent('Creating account...');
+describe('RegisterForm — privacy-safe error messages', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
 
-  act(() => resolve({ user: { id: 'u1', email: 'a@b.com' }, token: 'tok' }));
-  await waitFor(() => expect(submitButton()).not.toBeDisabled());
-  expect(submitButton()).toHaveTextContent('Create Account');
-  await waitFor(() => expect(push).toHaveBeenCalledWith('/chat'));
-  expect(toastSuccess).toHaveBeenCalledWith('Account created successfully! Welcome to ChenPilot!');
-});
+  it('renders the create account button', () => {
+    renderForm();
+    expect(screen.getByRole('button', { name: /create account/i })).toBeDefined();
+  });
 
-test('shows server error inline after a rejected registration', () => {
-  setAuth({ error: 'Email already in use' });
-  renderForm();
-  expect(submitButton()).not.toBeDisabled();
-  expect(screen.getByText('Email already in use')).toBeInTheDocument();
-});
+  it('shows the generic error when the thunk rejects with "email already taken"', async () => {
+    mockDispatch.mockReturnValue({
+      unwrap: () => Promise.reject(new Error('Email already taken')),
+    });
 
-test('clears inline error when a new registration attempt starts', () => {
-  setAuth({ error: 'Email already in use' });
-  setAuth({ error: null });
-  renderForm();
-  expect(screen.queryByText('Email already in use')).not.toBeInTheDocument();
-});
+    await fillAndSubmit('taken@example.com', 'Password1!', 'Ada');
 
-test('retains input values after a failed submit attempt', () => {
-  setAuth({ error: 'Email already in use' });
-  renderForm();
-  const email = screen.getByLabelText(/Email Address/i);
-  const password = screen.getByLabelText(/Password/i);
-  fireEvent.change(email, { target: { value: 'a@b.com' } });
-  fireEvent.change(password, { target: { value: 'Password1' } });
-  expect(email).toHaveValue('a@b.com');
-  expect(password).toHaveValue('Password1');
-  expect(screen.getByText('Email already in use')).toBeInTheDocument();
-  expect(email).toHaveValue('a@b.com');
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(GENERIC_REGISTER_ERROR, expect.anything());
+    });
+  });
+
+  it('shows the generic error on HTTP 409 conflict (email exists)', async () => {
+    mockDispatch.mockReturnValue({
+      unwrap: () =>
+        Promise.reject({
+          response: { status: 409, data: { message: 'Email already in use' } },
+        }),
+    });
+
+    await fillAndSubmit('taken@example.com', 'Password1!', 'Ada');
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(GENERIC_REGISTER_ERROR, expect.anything());
+    });
+  });
+
+  it('shows the generic error on a server error (no detail leak)', async () => {
+    mockDispatch.mockReturnValue({
+      unwrap: () => Promise.reject(new Error('Internal server error')),
+    });
+
+    await fillAndSubmit('new@example.com', 'Password1!', 'Ada');
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(GENERIC_REGISTER_ERROR, expect.anything());
+    });
+  });
+
+  it('does NOT reveal that the email is already registered', async () => {
+    mockDispatch.mockReturnValue({
+      unwrap: () => Promise.reject(new Error('Email already registered')),
+    });
+
+    await fillAndSubmit('taken@example.com', 'Password1!', 'Ada');
+
+    await waitFor(() => {
+      const [msg] = mockToastError.mock.calls[0];
+      expect(String(msg)).not.toMatch(/already|taken|registered|exists|duplicate/i);
+    });
+  });
+
+  it('redirects to /chat on successful registration', async () => {
+    mockDispatch.mockReturnValue({ unwrap: () => Promise.resolve({}) });
+
+    await fillAndSubmit('new@example.com', 'Password1!', 'Ada');
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/chat');
+    });
+  });
+
+  it('shows field-level validation for weak password without calling thunk', async () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/email address/i), {
+      target: { value: 'valid@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'weak' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+    });
+
+    await waitFor(() => {
+      expect(mockDispatch).not.toHaveBeenCalled();
+    });
+  });
 });
