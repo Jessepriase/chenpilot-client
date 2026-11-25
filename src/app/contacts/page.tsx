@@ -235,8 +235,8 @@ export default function ContactsPage() {
                   <div className="space-y-3">
                     <div>
                       <p className="text-sm font-medium text-gray-300 mb-1">Address</p>
-                      <div className="flex items-center space-x-2">
-                        <code className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded flex-1">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <code className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded flex-1 min-w-0 break-all">
                           {formatAddress(contact.address)}
                         </code>
                         <Button
@@ -345,7 +345,7 @@ export default function ContactsPage() {
               />
             </div>
 
-            <div className="flex justify-end space-x-3 pt-4">
+            <div className="flex flex-wrap justify-end gap-3 pt-4">
               <Button type="button" variant="secondary" onClick={() => setIsCreateModalOpen(false)}>
                 Cancel
               </Button>
@@ -377,7 +377,7 @@ export default function ContactsPage() {
                   <code className="break-all text-sm">{formatAddress(formData.address.trim())}</code>
                 </div>
               </div>
-              <div className="flex justify-end space-x-3 pt-2">
+              <div className="flex flex-wrap justify-end gap-3 pt-2">
                 <Button type="button" variant="secondary" onClick={cancelAddressChange}>Cancel</Button>
                 <Button type="button" onClick={() => void persistContactUpdate()}>
                   Confirm destination change
@@ -428,7 +428,7 @@ export default function ContactsPage() {
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex flex-wrap justify-end gap-3 pt-4">
                 <Button type="button" variant="secondary" onClick={() => setIsEditModalOpen(false)}>
                   Cancel
                 </Button>
@@ -522,7 +522,7 @@ export default function ContactsPage() {
             </select>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="flex flex-wrap justify-end gap-3 pt-4">
             <Button
               type="button"
               variant="secondary"
@@ -561,7 +561,7 @@ export default function ContactsPage() {
                 <code className="break-all text-sm">{formatAddress(formData.address.trim())}</code>
               </div>
             </div>
-            <div className="flex justify-end space-x-3 pt-2">
+            <div className="flex flex-wrap justify-end gap-3 pt-2">
               <Button type="button" variant="secondary" onClick={cancelAddressChange}>
                 Cancel
               </Button>
@@ -603,7 +603,7 @@ export default function ContactsPage() {
             </select>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="flex flex-wrap justify-end gap-3 pt-4">
             <Button
               type="button"
               variant="secondary"

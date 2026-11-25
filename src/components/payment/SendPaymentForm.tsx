@@ -412,7 +412,7 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Recipient Address
             </label>
-            <div className="flex gap-2">
+            <div className="form-row-wrap">
               <Input
                 {...register('recipientAddress')}
                 placeholder="GABCD1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
@@ -459,7 +459,7 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Amount
             </label>
-            <div className="flex space-x-2">
+            <div className="form-row-wrap">
               <Input
                 {...register('amount')}
                 placeholder="0.00"
