@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useAppDispatch } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
 import { register as registerUser } from "@/store/slices/authSlice";
 import { registerSchema } from "@/utils/validation";
 import { Button } from "@/components/ui/Button";
@@ -22,6 +22,7 @@ interface RegisterFormData {
 export function RegisterForm() {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const { error } = useAppSelector((state) => state.auth);
   const [showPassword, setShowPassword] = useState(false);
 
   const {
@@ -165,6 +166,10 @@ export function RegisterForm() {
             </a>
           </label>
         </div>
+
+        {error && (
+          <p className="mt-2 text-xs text-red-400 font-light">{error}</p>
+        )}
 
         <Button
           onClick={handleSubmit(onSubmit)}

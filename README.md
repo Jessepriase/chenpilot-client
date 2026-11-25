@@ -70,7 +70,7 @@ A modern, responsive web client for **ChenPilot** - a crypto wallet management s
 - `pnpm build` - Build for production
 - `pnpm start` - Start production server
 - `pnpm lint` - Run ESLint
-- `pnpm test` - Run tests (when implemented)
+- `pnpm test` - Run the test suite with Vitest
 
 ## CI/CD Pipeline
 
@@ -111,7 +111,7 @@ All deployments require passing:
 1. ✅ Dependency installation (`pnpm install --frozen-lockfile`)
 2. ✅ Linting (`pnpm lint`)
 3. ✅ Build (`pnpm build`)
-4. ✅ Tests (`pnpm test` - when implemented)
+4. ✅ Tests (`pnpm test`)
 
 ## Git Hooks (Husky)
 

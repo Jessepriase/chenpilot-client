@@ -21,7 +21,7 @@ interface LoginFormData {
 export default function LoginForm() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { isLoading } = useAppSelector((state) => state.auth);
+  const { isLoading, error } = useAppSelector((state) => state.auth);
   const [showPassword, setShowPassword] = useState(false);
 
   const {
@@ -123,6 +123,10 @@ export default function LoginForm() {
             Forgot password?
           </Link>
         </div>
+
+        {error && (
+          <p className="mt-2 text-xs text-red-400 font-light">{error}</p>
+        )}
 
         <Button
           onClick={handleSubmit(onSubmit)}
