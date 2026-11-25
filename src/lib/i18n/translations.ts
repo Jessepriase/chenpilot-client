@@ -1,5 +1,9 @@
+import { workflowTranslations } from './workflowTranslations';
+
 export const translations = {
   en: {
+    // auth, payment, contacts, validation (#292)
+    ...workflowTranslations.en,
     common: {
       language: 'Language',
       english: 'English',
@@ -34,6 +38,8 @@ export const translations = {
     },
   },
   ar: {
+    // auth, payment, contacts, validation (#292)
+    ...workflowTranslations.ar,
     common: {
       language: 'اللغة',
       english: 'English',
@@ -68,6 +74,8 @@ export const translations = {
     },
   },
   es: {
+    // auth, payment, contacts, validation (#292)
+    ...workflowTranslations.es,
     common: {
       language: 'Idioma',
       english: 'English',
@@ -102,6 +110,8 @@ export const translations = {
     },
   },
   fr: {
+    // auth, payment, contacts, validation (#292)
+    ...workflowTranslations.fr,
     common: {
       language: 'Langue',
       english: 'English',

@@ -2,10 +2,10 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ContactsPage from './page';
-import toast from 'react-hot-toast';
-import { createContact, updateContact, deleteContact, getContacts } from '@/store/slices/contactsSlice';
+import type { Contact } from '@/types';
 
 const mockPush = vi.fn();
+const { mockGetContacts } = vi.hoisted(() => ({ mockGetContacts: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -19,6 +19,10 @@ vi.mock('react-hot-toast', () => ({
   },
 }));
 
+vi.mock('@/services/api', () => ({
+  default: { getContacts: mockGetContacts },
+}));
+
 vi.mock('@/components/layout/ChatLayout', () => ({
   ChatLayout: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="chat-layout">{children}</div>
@@ -26,11 +30,21 @@ vi.mock('@/components/layout/ChatLayout', () => ({
 }));
 
 const mockDispatch = vi.fn();
-let mockState: any;
+type ContactsPageMockState = {
+  auth: { isAuthenticated: boolean };
+  chat: { isOnline: boolean };
+  contacts: {
+    list: Contact[];
+    isLoading: boolean;
+    error: string | null;
+    selectedContact: Contact | null;
+  };
+};
+let mockState: ContactsPageMockState;
 
 vi.mock('@/store', () => ({
   useAppDispatch: () => mockDispatch,
-  useAppSelector: (selector: (state: any) => any) => selector(mockState),
+  useAppSelector: (selector: (state: ContactsPageMockState) => unknown) => selector(mockState),
 }));
 
 describe('#343 — ContactsPage Component Tests', () => {
@@ -57,6 +71,7 @@ describe('#343 — ContactsPage Component Tests', () => {
     vi.clearAllMocks();
     mockState = {
       auth: { isAuthenticated: true },
+      chat: { isOnline: true },
       contacts: {
         list: sampleContacts,
         isLoading: false,
@@ -76,6 +91,7 @@ describe('#343 — ContactsPage Component Tests', () => {
   it('redirects to /auth/login when user is unauthenticated', () => {
     mockState = {
       auth: { isAuthenticated: false },
+      chat: { isOnline: true },
       contacts: { list: [], isLoading: false, error: null, selectedContact: null },
     };
 
@@ -88,6 +104,7 @@ describe('#343 — ContactsPage Component Tests', () => {
   it('renders loading indicator when contacts are loading', () => {
     mockState = {
       auth: { isAuthenticated: true },
+      chat: { isOnline: true },
       contacts: { list: [], isLoading: true, error: null, selectedContact: null },
     };
 
@@ -98,6 +115,7 @@ describe('#343 — ContactsPage Component Tests', () => {
   it('renders empty state when there are no contacts and allows opening create modal', () => {
     mockState = {
       auth: { isAuthenticated: true },
+      chat: { isOnline: true },
       contacts: { list: [], isLoading: false, error: null, selectedContact: null },
     };
 
@@ -111,10 +129,31 @@ describe('#343 — ContactsPage Component Tests', () => {
     expect(screen.getByRole('heading', { name: 'Add New Contact' })).toBeInTheDocument();
   });
 
+  it('aborts the contacts request when the route unmounts', async () => {
+    mockGetContacts.mockImplementationOnce(
+      () => new Promise(() => {}),
+    );
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return action(mockDispatch, () => mockState, undefined);
+      }
+      return action;
+    });
+
+    const { unmount } = render(<ContactsPage />);
+    await waitFor(() => expect(mockGetContacts).toHaveBeenCalled());
+    const signal = mockGetContacts.mock.calls[0][0] as AbortSignal;
+
+    expect(signal.aborted).toBe(false);
+    unmount();
+    expect(signal.aborted).toBe(true);
+  });
+
   describe('Create Contact Workflow', () => {
     beforeEach(() => {
       mockState = {
         auth: { isAuthenticated: true },
+        chat: { isOnline: true },
         contacts: { list: [], isLoading: false, error: null, selectedContact: null },
       };
     });
