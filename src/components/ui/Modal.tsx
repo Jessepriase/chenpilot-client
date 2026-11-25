@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { cn } from '@/utils/cn';
 import { ModalProps } from '@/types';
 import { X } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
@@ -12,6 +13,10 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   size = 'md',
   className,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  onConfirm,
+  danger = false,
 }) => {
   // Handle escape key
   useEffect(() => {
@@ -50,7 +55,11 @@ export const Modal: React.FC<ModalProps> = ({
       />
       
       {/* Modal */}
-      <div className="flex min-h-full items-center justify-center p-4">
+      <div
+        className="flex min-h-full items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+      >
         <div
           className={cn(
             'relative w-full bg-white dark:bg-gray-800 rounded-lg shadow-xl',
@@ -77,6 +86,26 @@ export const Modal: React.FC<ModalProps> = ({
           <div className="px-6 py-4">
             {children}
           </div>
+
+          {/* Actions */}
+          {onConfirm && (
+            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onClose}
+              >
+                {cancelLabel}
+              </Button>
+              <Button
+                type="button"
+                variant={danger ? 'danger' : 'primary'}
+                onClick={onConfirm}
+              >
+                {confirmLabel}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,21 +1,24 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { fetchProfile } from '@/store/slices/authSlice';
-import React, { useState } from 'react';
+import { fetchProfile, clearAuth } from '@/store/slices/authSlice';
 import axios from 'axios';
-import { useAppSelector } from '@/store';
+import { useRouter } from 'next/navigation';
 import { ChatLayout } from '@/components/layout/ChatLayout';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import apiService from '@/services/api';
+import toast from 'react-hot-toast';
 
 export default function SettingsPage() {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const { isAuthenticated, user, isLoading } = useAppSelector((state) => state.auth);
   const { theme } = useAppSelector((state) => state.ui) || { mode: 'dark' };
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -37,6 +40,20 @@ export default function SettingsPage() {
   const avatarInitials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : user?.email?.[0]?.toUpperCase() ?? '?';
+
+  const handleDeleteAccount = async () => {
+    try {
+      await apiService.deleteAccount();
+      dispatch(clearAuth());
+      toast.success('Account deleted successfully.');
+      router.push('/auth/login');
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : String(error || 'Failed to delete account');
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleteAccountOpen(false);
+    }
+  };
 
   return (
     <ChatLayout>
@@ -129,7 +146,13 @@ export default function SettingsPage() {
                   <h3 className="text-lg font-medium text-white mb-4">Security</h3>
                   <div className="space-y-4">
                     <Button variant="ghost" className="w-full justify-start">Change Password</Button>
-                    <Button variant="ghost" className="w-full justify-start text-red-600 hover:text-red-700">Delete Account</Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start text-red-600 hover:text-red-700"
+                      onClick={() => setIsDeleteAccountOpen(true)}
+                    >
+                      Delete Account
+                    </Button>
                   </div>
                 </div>
               </Card>
@@ -137,6 +160,21 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteAccountOpen}
+        onClose={() => setIsDeleteAccountOpen(false)}
+        title="Delete Account"
+        confirmLabel="Delete Account"
+        cancelLabel="Cancel"
+        onConfirm={handleDeleteAccount}
+        danger
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          This will permanently delete your account and all associated data. This action cannot be undone.
+        </p>
+      </Modal>
     </ChatLayout>
   );
 }

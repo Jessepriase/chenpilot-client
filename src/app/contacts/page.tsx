@@ -39,6 +39,8 @@ export default function ContactsPage() {
     address: '',
     tokenType: 'STRK',
   });
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteConfirmContact, setDeleteConfirmContact] = useState<Contact | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -86,15 +88,22 @@ export default function ContactsPage() {
     }
   };
 
-  const handleDeleteContact = async (contact: Contact) => {
-    if (window.confirm(`Are you sure you want to delete ${contact.name}?`)) {
-      try {
-        await dispatch(deleteContact(contact.id)).unwrap();
-        toast.success('Contact deleted successfully!');
-      } catch (error: any) {
-        const errorMessage = error instanceof Error ? error.message : String(error || 'Failed to delete contact');
-        toast.error(errorMessage);
-      }
+  const handleDeleteContact = (contact: Contact) => {
+    setDeleteConfirmContact(contact);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDeleteContact = async () => {
+    if (!deleteConfirmContact) return;
+    try {
+      await dispatch(deleteContact(deleteConfirmContact.id)).unwrap();
+      toast.success('Contact deleted successfully!');
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : String(error || 'Failed to delete contact');
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleteModalOpen(false);
+      setDeleteConfirmContact(null);
     }
   };
 
@@ -206,6 +215,7 @@ export default function ContactsPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      aria-label="Delete contact"
                       onClick={() => handleDeleteContact(contact)}
                       className="text-red-600 hover:text-red-700"
                     >
@@ -359,6 +369,24 @@ export default function ContactsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Contact Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeleteConfirmContact(null);
+        }}
+        title="Delete Contact"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmDeleteContact}
+        danger
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          This will permanently remove <strong>{deleteConfirmContact?.name}</strong> from your contacts. This action cannot be undone.
+        </p>
       </Modal>
       </div>
     </ChatLayout>
