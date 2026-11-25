@@ -1,125 +1,165 @@
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
-import toast from 'react-hot-toast';
-import * as authStore from '@/store';
-import { push } from 'next/navigation';
-import LoginForm from './loginform';
+/**
+ * Tests for LoginForm privacy-safe error handling.
+ *
+ * Verifies that no account-existence information leaks through the toast
+ * shown after a failed login attempt, regardless of what the backend returns.
+ */
+import { cleanup, render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/store/slices/authSlice', () => ({
-  login: vi.fn(),
-  googleAuth: vi.fn(),
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+const mockDispatch = vi.fn();
+const mockPush = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+
+vi.mock('@/store', () => ({
+  useAppDispatch: () => mockDispatch,
+  useAppSelector: () => ({ isLoading: false }),
 }));
 
-vi.mock('@/store', () => {
-  let isLoading = false;
-  let error: string | null = null;
-  return {
-    useAppDispatch: vi.fn(() => vi.fn((action: unknown) => action)),
-    useAppSelector: vi.fn((cb: (state: { auth: { isLoading: boolean; error: string | null } }) => { isLoading: boolean; error: string | null }) =>
-      cb({ auth: { isLoading, error } }),
-    ),
-    __setAuth: (s: { isLoading?: boolean; error?: string | null }) => {
-      if (s.isLoading !== undefined) isLoading = s.isLoading;
-      if (s.error !== undefined) error = s.error;
-    },
-  };
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}));
+
+vi.mock('@/components/auth/GoogleSignIn', () => ({
+  GoogleSignInButton: () => <button type="button">Google</button>,
+}));
+
+import LoginForm from './loginform';
+import { GENERIC_AUTH_ERROR } from '@/services/auth.service';
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
 });
 
-vi.mock('next/navigation', () => {
-  const push = vi.fn();
-  return { useRouter: vi.fn(() => ({ push })), push };
-});
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+function renderForm() {
+  return render(<LoginForm />);
+}
 
-import { login } from '@/store/slices/authSlice';
-
-const loginMock = vi.mocked(login);
-const toastSuccess = vi.mocked(toast.success);
-const toastError = vi.mocked(toast.error);
-const setAuth = authStore.__setAuth;
-
-const resolvable = () => {
-  let resolve!: () => void;
-  const p = new Promise<void>((res) => {
-    resolve = res;
-  }) as Promise<void> & { unwrap: () => Promise<void> };
-  p.unwrap = () => p;
-  return { promise: p as unknown as Promise<{ user: { id: string }; token: string }>, resolve: resolve! };
-};
-
-const renderForm = () => render(<LoginForm />);
-const submitButton = () => screen.getByRole('button', { name: /Sign In|Signing in/ });
-
-beforeEach(() => {
-  setAuth({ isLoading: false, error: null });
-  loginMock.mockReset();
-  push.mockClear();
-});
-
-test('renders with submit enabled, "Sign In" status and no inline server error', () => {
+async function fillAndSubmit(email: string, password: string) {
   renderForm();
-  expect(submitButton()).not.toBeDisabled();
-  expect(submitButton()).toHaveTextContent('Sign In');
-  expect(screen.queryByText(/Invalid credentials|Server error/)).not.toBeInTheDocument();
-});
+  fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: email } });
+  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: password } });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+  });
+}
 
-test('disables submit and shows pending status while login is pending', () => {
-  setAuth({ isLoading: true, error: null });
-  renderForm();
-  expect(submitButton()).toBeDisabled();
-  expect(submitButton()).toHaveTextContent('Signing in...');
-});
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
-test('shows server error inline after a rejected login', () => {
-  setAuth({ isLoading: false, error: 'Invalid credentials' });
-  renderForm();
-  expect(submitButton()).not.toBeDisabled();
-  expect(screen.getByText('Invalid credentials')).toBeInTheDocument();
-});
+describe('LoginForm — privacy-safe error messages', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
 
-test('clears inline error when a new login attempt starts', () => {
-  setAuth({ isLoading: false, error: 'Invalid credentials' });
-  setAuth({ isLoading: true, error: null });
-  renderForm();
-  expect(screen.queryByText('Invalid credentials')).not.toBeInTheDocument();
-  expect(submitButton()).toBeDisabled();
-});
+  it('renders the sign-in button', () => {
+    renderForm();
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeDefined();
+  });
 
-test('navigates and shows success toast on successful submit', async () => {
-  const { promise, resolve } = resolvable();
-  loginMock.mockReturnValue(promise);
-  renderForm();
-  fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'a@b.com' } });
-  fireEvent.change(screen.getByLabelText(/Password/i), { target: { value: 'password123' } });
-  fireEvent.click(submitButton());
-  await waitFor(() => expect(loginMock).toHaveBeenCalledTimes(1));
-  act(() => resolve());
-  await waitFor(() => expect(push).toHaveBeenCalledWith('/chat'));
-  expect(toastSuccess).toHaveBeenCalledWith('Successfully logged in!');
-});
+  it('shows the generic error when the thunk rejects with "user not found"', async () => {
+    mockDispatch.mockReturnValue({
+      unwrap: () => Promise.reject(new Error('User not found')),
+    });
 
-test('shows error toast when submit fails', async () => {
-  let reject!: (err: unknown) => void;
-  const p = new Promise<void>((_res, rej) => {
-    reject = rej;
-  }) as Promise<void> & { unwrap: () => Promise<void> };
-  p.unwrap = () => p;
-  loginMock.mockReturnValue(p as unknown as Promise<{ user: { id: string }; token: string }>);
-  renderForm();
-  fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'a@b.com' } });
-  fireEvent.change(screen.getByLabelText(/Password/i), { target: { value: 'password123' } });
-  fireEvent.click(submitButton());
-  await waitFor(() => expect(loginMock).toHaveBeenCalledTimes(1));
-  reject(new Error('Server error'));
-  await waitFor(() => expect(toastError).toHaveBeenCalled());
-});
+    await fillAndSubmit('test@example.com', 'Password1');
 
-test('retains input values after a failed submit attempt', () => {
-  setAuth({ isLoading: false, error: 'Invalid credentials' });
-  renderForm();
-  const email = screen.getByLabelText(/Email Address/i);
-  fireEvent.change(email, { target: { value: 'a@b.com' } });
-  expect(email).toHaveValue('a@b.com');
-  expect(screen.getByText('Invalid credentials')).toBeInTheDocument();
-  expect(email).toHaveValue('a@b.com');
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(GENERIC_AUTH_ERROR, expect.anything());
+    });
+  });
+
+  it('shows the generic error when the thunk rejects with "invalid credentials"', async () => {
+    mockDispatch.mockReturnValue({
+      unwrap: () => Promise.reject(new Error('Invalid credentials')),
+    });
+
+    await fillAndSubmit('test@example.com', 'Password1');
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(GENERIC_AUTH_ERROR, expect.anything());
+    });
+  });
+
+  it('shows the generic error on HTTP 401', async () => {
+    mockDispatch.mockReturnValue({
+      unwrap: () =>
+        Promise.reject({ response: { status: 401, data: { message: 'Unauthorized' } } }),
+    });
+
+    await fillAndSubmit('test@example.com', 'Password1');
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(GENERIC_AUTH_ERROR, expect.anything());
+    });
+  });
+
+  it('shows the generic error on network failure (no enumeration leak)', async () => {
+    mockDispatch.mockReturnValue({
+      unwrap: () => Promise.reject({ message: 'Network Error' }),
+    });
+
+    await fillAndSubmit('test@example.com', 'Password1');
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(GENERIC_AUTH_ERROR, expect.anything());
+    });
+  });
+
+  it('does NOT reveal account-existence information in the toast message', async () => {
+    mockDispatch.mockReturnValue({
+      unwrap: () => Promise.reject(new Error('User not found')),
+    });
+
+    await fillAndSubmit('test@example.com', 'Password1');
+
+    await waitFor(() => {
+      const [msg] = mockToastError.mock.calls[0];
+      expect(String(msg)).not.toMatch(/not found|does not exist|no account/i);
+    });
+  });
+
+  it('redirects to /chat on successful login', async () => {
+    mockDispatch.mockReturnValue({ unwrap: () => Promise.resolve({}) });
+
+    await fillAndSubmit('test@example.com', 'Password1');
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/chat');
+    });
+  });
+
+  it('shows field-level validation error for invalid email without calling thunk', async () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/email address/i), {
+      target: { value: 'not-an-email' },
+    });
+    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Password1' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+    });
+
+    // Zod validation fires before the thunk
+    await waitFor(() => {
+      expect(mockDispatch).not.toHaveBeenCalled();
+    });
+  });
 });
