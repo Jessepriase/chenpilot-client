@@ -17,9 +17,10 @@ import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDi
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Button } from "@/components/ui/Button";
 import toast from "react-hot-toast";
-import { X, Menu, PanelLeft, Plus } from "lucide-react";
+import { X, Menu, PanelLeft, Plus, Bell } from "lucide-react";
 import { cn } from "@/utils/cn";
 import Image from "next/image";
+import { toggleNotificationHistory } from "@/store/slices/uiSlice";
 
 interface ChatLayoutProps {
   children: React.ReactNode;
@@ -66,6 +67,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const { chatHistory, currentConversation, conversations, messages } = useAppSelector(
     (state) => state.chat,
   );
+  const notifications = useAppSelector((state) => state.ui.notifications) || [];
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   // Convert chat history object to array for display
   const chatHistoryList = React.useMemo(() => {
@@ -189,7 +192,22 @@ const confirmDeleteChat = async (conversationId: string) => {
             ChenPilot
           </h1>
         </div>
-        <div className="w-10" />
+        <button
+          data-testid="mobile-notifications-button"
+          onClick={() => dispatch(toggleNotificationHistory())}
+          aria-label="View notification history"
+          className="relative p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+        >
+          <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span
+              data-testid="unread-notifications-badge"
+              className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-purple-600 text-[10px] font-bold text-white"
+            >
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -258,7 +276,24 @@ const confirmDeleteChat = async (conversationId: string) => {
             </div>
 
             {!sidebarCollapsed && (
-              <div className="absolute top-4 right-4">
+              <div className="absolute top-4 right-4 flex items-center space-x-1">
+                <button
+                  data-testid="desktop-notifications-button"
+                  onClick={() => dispatch(toggleNotificationHistory())}
+                  aria-label="View notification history"
+                  className="relative p-2 text-[#C4B5FD] hover:bg-gray-800/50 rounded transition-colors"
+                  title="Notification history"
+                >
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span
+                      data-testid="desktop-unread-badge"
+                      className="absolute top-1 right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-purple-500 text-[9px] font-bold text-white"
+                    >
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
                 <button
                   onClick={toggleSidebar}
                   className="p-2 text-[#C4B5FD] hover:bg-gray-800/50 rounded transition-colors"

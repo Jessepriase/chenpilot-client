@@ -93,6 +93,7 @@ These are all the keys the client reads or writes. The source of truth is `STORA
 | `chat_drafts` | localStorage | `lib/accountDeletion.ts` | Until logout or account deletion | ✅ | Personal | Unsent chat drafts |
 | `mfa_secret` | localStorage + sessionStorage | `services/auth.service.ts` | Never written; removed defensively when MFA setup is cancelled | ✅ | Credential | Must never hold an MFA secret |
 | `mfa_recovery_codes` | localStorage + sessionStorage | `services/auth.service.ts` | Never written; removed defensively when MFA setup is cancelled | ✅ | Credential | Must never hold MFA recovery codes |
+| `notification_history` | localStorage | `store/slices/uiSlice.ts` | Until logout or user clear | ✅ | Personal | Non-sensitive notification history metadata (transaction outcomes, agent status events) |
 | `theme` | localStorage | `store/slices/uiSlice.ts`, `ThemeProvider` | Persistent | ❌ | Preference | `light` / `dark` |
 | `language_by_user` | localStorage | `lib/i18n/languagePreference.ts` | Persistent | ❌ | Preference | Map of user id → chosen UI language (#291) |
 | `translation_language` | localStorage | `store/slices/uiSlice.ts` | Persistent | ❌ | Preference | Language messages are translated into (#83) |
