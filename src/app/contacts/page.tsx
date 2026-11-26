@@ -23,7 +23,9 @@ import {
 } from 'lucide-react';
 import { formatAddress } from '@/utils/format';
 import { Contact, CreateContactRequest } from '@/types';
+import { BIDI_LTR_INPUT_PROPS, LtrText } from '@/components/ui/LtrText';
 import toast from 'react-hot-toast';
+import { useT } from "@/lib/i18n/useT";
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -32,6 +34,8 @@ export default function ContactsPage() {
   const { list: contacts, isLoading } = useAppSelector((state) => state.contacts);
   
   const [searchTerm, setSearchTerm] = useState('');
+  // Translated workflow strings (#292)
+  const { t } = useT();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   // Edit modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -41,6 +45,8 @@ export default function ContactsPage() {
     address: '',
     tokenType: 'XLM',
   });
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteConfirmContact, setDeleteConfirmContact] = useState<Contact | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -48,7 +54,12 @@ export default function ContactsPage() {
       return;
     }
 
-    dispatch(getContacts());
+    const controller = new AbortController();
+    dispatch(getContacts(undefined, { signal: controller.signal }));
+
+    return () => {
+      controller.abort();
+    };
   }, [dispatch, isAuthenticated, router]);
 
   const filteredContacts = contacts.filter(contact =>
@@ -230,7 +241,7 @@ export default function ContactsPage() {
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Your Contacts</h1>
+              <h1 className="text-2xl font-bold">{t("contacts.yourContacts")}</h1>
               <p className="text-gray-300">
                 {contacts.length} contact{contacts.length !== 1 ? 's' : ''} total
               </p>
@@ -249,19 +260,19 @@ export default function ContactsPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-white">
-                Your Contacts
+                {t("contacts.yourContacts")}
               </h2>
               <p className="text-gray-300">
                 {contacts.length} contact{contacts.length !== 1 ? 's' : ''} total
               </p>
             </div>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute start-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search contacts..."
+                placeholder={t("contacts.searchPlaceholder")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full sm:w-64"
+                className="ps-10 w-full sm:w-64"
               />
             </div>
 
@@ -308,10 +319,10 @@ export default function ContactsPage() {
                       {contact.name}
                     </h3>
                     <p className="text-sm text-gray-300">
-                      {contact.tokenType}
+                      <LtrText>{contact.tokenType}</LtrText>
                     </p>
                   </div>
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -322,6 +333,7 @@ export default function ContactsPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      aria-label="Delete contact"
                       onClick={() => handleDeleteContact(contact)}
                       className="text-red-600 hover:text-red-700"
                     >
@@ -333,11 +345,14 @@ export default function ContactsPage() {
                 <div className="space-y-3">
                   <div>
                     <p className="text-sm font-medium text-gray-300 mb-1">
-                      Address
+                      {t("contacts.address")}
                     </p>
-                    <div className="flex items-center space-x-2">
-                      <code className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded flex-1">
-                        {formatAddress(contact.address)}
+                    <div className="flex items-center gap-2">
+                      <code
+                        dir="ltr"
+                        className="bidi-ltr-isolate text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded flex-1 text-start"
+                      >
+                        <LtrText>{formatAddress(contact.address)}</LtrText>
                       </code>
                       <Button
                         type="button"
@@ -376,28 +391,30 @@ export default function ContactsPage() {
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        title="Add New Contact"
+        title={t("contacts.addNew")}
       >
         <form onSubmit={handleCreateContact} className="space-y-4">
           <Input
-            label="Name"
-            placeholder="Enter contact name"
+            label={t("contacts.name")}
+            placeholder={t("contacts.namePlaceholder")}
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
           />
           
           <Input
-            label="Address"
-            placeholder="Enter Stellar address"
+            label={t("contacts.address")}
+            placeholder={t("contacts.addressPlaceholder")}
             value={formData.address}
             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+            {...BIDI_LTR_INPUT_PROPS}
+            className="font-mono"
             required
           />
           
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Token Type
+              {t("contacts.tokenType")}
             </label>
             <select
               value={formData.tokenType}
@@ -410,16 +427,16 @@ export default function ContactsPage() {
             </select>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="flex flex-wrap justify-end gap-3 pt-4">
             <Button
               type="button"
               variant="secondary"
               onClick={() => setIsCreateModalOpen(false)}
             >
-              Cancel
+              {t("contacts.cancel")}
             </Button>
             <Button type="submit">
-              Add Contact
+              {t("contacts.add")}
             </Button>
           </div>
         </form>
@@ -429,28 +446,30 @@ export default function ContactsPage() {
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        title="Edit Contact"
+        title={t("contacts.edit")}
       >
         <form onSubmit={handleUpdateContact} className="space-y-4">
           <Input
-            label="Name"
-            placeholder="Enter contact name"
+            label={t("contacts.name")}
+            placeholder={t("contacts.namePlaceholder")}
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
           />
           
           <Input
-            label="Address"
-            placeholder="Enter Stellar address"
+            label={t("contacts.address")}
+            placeholder={t("contacts.addressPlaceholder")}
             value={formData.address}
             onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+            {...BIDI_LTR_INPUT_PROPS}
+            className="font-mono"
             required
           />
           
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Token Type
+              {t("contacts.tokenType")}
             </label>
             <select
               value={formData.tokenType}
@@ -463,19 +482,37 @@ export default function ContactsPage() {
             </select>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="flex flex-wrap justify-end gap-3 pt-4">
             <Button
               type="button"
               variant="secondary"
               onClick={() => setIsEditModalOpen(false)}
             >
-              Cancel
+              {t("contacts.cancel")}
             </Button>
             <Button type="submit">
-              Update Contact
+              {t("contacts.update")}
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Contact Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeleteConfirmContact(null);
+        }}
+        title="Delete Contact"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmDeleteContact}
+        danger
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          This will permanently remove <strong>{deleteConfirmContact?.name}</strong> from your contacts. This action cannot be undone.
+        </p>
       </Modal>
       </div>
     </ChatLayout>

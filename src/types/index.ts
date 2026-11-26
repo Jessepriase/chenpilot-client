@@ -78,7 +78,7 @@ export interface LoginRequest {
 }
 
 export interface RegisterResponse {
-  success: boolean;
+  success: true;
   message: string;
   data: {
     user: User;
@@ -103,7 +103,7 @@ export interface RegisterResponse {
 }
 
 export interface LoginResponse {
-  success: boolean;
+  success: true;
   message: string;
   data: {
     user: User;
@@ -200,7 +200,7 @@ export interface ContactExportEnvelope {
 
 // Balance and Wallet Types
 export interface BalanceResponse {
-  success: boolean;
+  success: true;
   data: {
     hasBalance: boolean;
     balance: string;
@@ -299,6 +299,7 @@ export interface StellarTransaction {
   fee_charged: string;
   operation_count: number;
   successful: boolean;
+  status?: 'success' | 'pending' | 'failed';
   operations: StellarOperation[];
   /**
    * Memo value attached to the transaction, as returned by Horizon.
@@ -533,6 +534,11 @@ export interface ApiError {
   message: string;
 }
 
+export interface BackendResponseValidationIssue {
+  path: string;
+  message: string;
+}
+
 export interface ApiSuccess<T> {
   success: true;
   data: T;
@@ -718,6 +724,10 @@ export interface ModalProps {
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
   className?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm?: () => void;
+  danger?: boolean;
 }
 
 export interface CardProps {

@@ -14,6 +14,8 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { isTerminalAuthError, useClearPasswordOnLeave } from "@/components/auth/passwordHygiene";
 import { authService, toAuthPayload } from "@/services/auth.service";
+import { useT } from "@/lib/i18n/useT";
+import { LiveAnnouncer, SILENT_TOAST, type Announcement } from "@/components/ui/LiveAnnouncer";
 
 interface LoginFormData {
   email: string;
@@ -23,8 +25,11 @@ interface LoginFormData {
 export default function LoginForm() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { isLoading } = useAppSelector((state) => state.auth);
+  const { isLoading, error } = useAppSelector((state) => state.auth);
   const [showPassword, setShowPassword] = useState(false);
+  // Translated workflow strings (#292)
+  const { t, tv, language } = useT();
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
   const {
     register,
@@ -40,10 +45,12 @@ export default function LoginForm() {
   useClearPasswordOnLeave(() => setValue("password", ""));
 
   const onSubmit = async (data: LoginFormData) => {
+    setAnnouncement({ text: "Signing in…", tone: "polite" });
     try {
       // Send the normalized email; the field keeps what the user typed (#259)
       await dispatch(login(toAuthPayload(data))).unwrap();
-      toast.success("Successfully logged in!");
+      toast.success(t("auth.loginSuccess"), SILENT_TOAST);
+      setAnnouncement({ text: "Signed in.", tone: "polite" });
       router.push("/chat");
     } catch (error: unknown) {
       // Privacy-safe (account-enumeration resistance): every login failure shows the same
@@ -51,7 +58,9 @@ export default function LoginForm() {
       // account exists (#258). The email is kept. Terminal failures (wrong credentials,
       // validation) clear and refocus the password; transient ones (network, 5xx) keep it so
       // the user can just resubmit (#253).
-      toast.error(authService.normalizeLoginError(error));
+      const message = tv(authService.normalizeLoginError(error, language));
+      toast.error(message, SILENT_TOAST);
+      setAnnouncement({ text: message, tone: "assertive" });
       if (isTerminalAuthError(error)) {
         setValue("password", "");
         setFocus("password");
@@ -60,25 +69,27 @@ export default function LoginForm() {
   };
 
   const onInvalid = () => {
-    toast.error("Please fix the errors in the form");
+    toast.error(t("auth.fixErrors"));
   };
 
   return (
     <div className="w-full max-w-md">
       <div className="mb-12">
         <span className="text-xs text-white/40 font-light tracking-[0.3em] uppercase block mb-6">
-          Welcome Back
+          {t("auth.welcomeBack")}
         </span>
 
       </div>
 
+      {/* Announces sign-in progress and outcome once; the toasts are silent to screen readers (#307) */}
+      <LiveAnnouncer announcement={announcement} />
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="space-y-6">
         <div>
           <label
             htmlFor="email"
             className="block text-xs text-white/60 font-light tracking-wider uppercase mb-3"
           >
-            Email Address
+            {t("auth.emailAddress")}
           </label>
           <Input
             {...register("email")}
@@ -86,7 +97,7 @@ export default function LoginForm() {
             id="email"
             name="email"
             autoComplete="email"
-            placeholder="your@email.com"
+            placeholder={t("auth.emailPlaceholder")}
             aria-required="true"
             aria-invalid={errors.email ? "true" : "false"}
             aria-describedby={errors.email ? "email-error" : undefined}
@@ -94,7 +105,7 @@ export default function LoginForm() {
           />
           {errors.email && (
             <p id="email-error" className="mt-2 text-xs text-red-400 font-light" role="alert">
-              {errors.email.message}
+              {tv(errors.email.message)}
             </p>
           )}
         </div>
@@ -104,7 +115,7 @@ export default function LoginForm() {
             htmlFor="password"
             className="block text-xs text-white/60 font-light tracking-wider uppercase mb-3"
           >
-            Password
+            {t("auth.password")}
           </label>
           <div className="relative">
             <Input
@@ -113,7 +124,7 @@ export default function LoginForm() {
               id="password"
               name="password"
               autoComplete="current-password"
-              placeholder="Enter your password"
+              placeholder={t("auth.passwordPlaceholder")}
               aria-required="true"
               aria-invalid={errors.password ? "true" : "false"}
               aria-describedby={errors.password ? "password-error" : undefined}
@@ -123,7 +134,7 @@ export default function LoginForm() {
               type="button"
               className="absolute inset-y-0 right-0 pr-4 flex items-center"
               onClick={() => setShowPassword(!showPassword)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
               aria-pressed={showPassword}
             >
               {showPassword ? (
@@ -135,7 +146,7 @@ export default function LoginForm() {
           </div>
           {errors.password && (
             <p id="password-error" className="mt-2 text-xs text-red-400 font-light" role="alert">
-              {errors.password.message}
+              {tv(errors.password.message)}
             </p>
           )}
         </div>
@@ -149,15 +160,19 @@ export default function LoginForm() {
               className="w-4 h-4 border border-white/10 bg-transparent"
               aria-describedby="remember-me-desc"
             />
-            <span id="remember-me-desc">Remember me</span>
+            <span id="remember-me-desc">{t("auth.rememberMe")}</span>
           </label>
           <Link
             href="/auth/forgot-password"
             className="text-white/40 hover:text-white font-light transition-colors"
           >
-            Forgot password?
+            {t("auth.forgotPassword")}
           </Link>
         </div>
+
+        {error && (
+          <p className="mt-2 text-xs text-red-400 font-light">{error}</p>
+        )}
 
         <Button
           type="submit"
@@ -167,11 +182,11 @@ export default function LoginForm() {
           {isLoading ? (
             <>
               <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-              Signing in...
+              {t("auth.signingIn")}
             </>
           ) : (
             <>
-              Sign In
+              {t("auth.signIn")}
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-500" />
             </>
           )}
@@ -185,7 +200,7 @@ export default function LoginForm() {
           </div>
           <div className="relative flex justify-center text-xs">
             <span className="px-4 bg-black text-white/40 font-light tracking-wider uppercase">
-              Or continue with
+              {t("auth.orContinueWith")}
             </span>
           </div>
         </div>
@@ -201,12 +216,12 @@ export default function LoginForm() {
 
       <div className="mt-8 text-center">
         <p className="text-sm text-white/40 font-light">
-          Don't have an account?{" "}
+          {t("auth.noAccount")}{" "}
           <Link
             href="/auth/register"
             className="text-white hover:text-white/80 transition-colors"
           >
-            Sign up
+            {t("auth.signUp")}
           </Link>
         </p>
       </div>

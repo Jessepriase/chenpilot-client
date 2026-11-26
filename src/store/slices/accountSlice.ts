@@ -1,5 +1,6 @@
 
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import {
   AccountStatus,
   WalletBalance,
@@ -11,11 +12,40 @@ import {
 } from "@/types";
 import { horizonFetch } from "@/utils/horizonFetch";
 import apiService from "@/services/api";
+
+
+export interface TransactionFilters {
+  type: string;        // e.g., 'payment', 'swap', 'deposit'
+  asset: string;       // e.g., 'XLM', 'USDC'
+  direction: string;   // 'sent' | 'received' | 'all'
+  status: string;      // 'success' | 'pending' | 'failed' | 'all'
+  startDate: string;   // ISO string or YYYY-MM-DD
+  endDate: string;     // ISO string or YYYY-MM-DD
+}
+
+type NetworkHealthStatus = "healthy" | "degraded" | "down" | "unknown";
+type AccountSyncState = "synced" | "syncing" | "desynced";
+
+const initialFilters: TransactionFilters = {
+  type: 'all',
+  asset: 'all',
+  direction: 'all',
+  status: 'all',
+  startDate: '',
+  endDate: '',
+};
+
 import {
   mergeNewestTransactionHistory,
   mergeTransactionHistory,
   reconcilePendingConfirmations,
 } from "@/utils/transactionHistory";
+import {
+  BackendResponseValidationError,
+  horizonTransactionPageResponseSchema,
+  parseBackendResponse,
+  stellarTransactionResponseSchema,
+} from "@/utils/validation";
 
 export type { TransactionFilters };
 
@@ -210,6 +240,7 @@ function mapHorizonTransaction(
 async function fetchTransactionHistoryPage(
   publicKey: string,
   cursor?: string,
+  signal?: AbortSignal,
 ): Promise<TransactionHistoryPage> {
   const params = new URLSearchParams({
     order: "desc",
@@ -222,15 +253,38 @@ async function fetchTransactionHistoryPage(
 
   const response = await horizonFetch(
     `https://horizon.stellar.org/accounts/${publicKey}/transactions?${params.toString()}`,
+    { signal },
   );
 
   if (!response.ok) {
     throw new Error("Failed to fetch transaction history");
   }
 
-  const data = await response.json();
-  const records: Record<string, unknown>[] = data?._embedded?.records ?? [];
-  const transactions = records.map(mapHorizonTransaction);
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError) {
+      throw new BackendResponseValidationError(
+        "GET /horizon/accounts/{publicKey}/transactions",
+        [{ path: "<root>", message: "Expected valid JSON" }],
+      );
+    }
+    throw error;
+  }
+  const parsedPage = parseBackendResponse(
+    "GET /horizon/accounts/{publicKey}/transactions",
+    horizonTransactionPageResponseSchema,
+    data,
+  );
+  const records = parsedPage._embedded.records;
+  const transactions = records.map((record, index) =>
+    parseBackendResponse(
+      `GET /horizon/accounts/{publicKey}/transactions record ${index}`,
+      stellarTransactionResponseSchema,
+      mapHorizonTransaction(record),
+    ),
+  );
   const oldestRecord = records[records.length - 1];
 
   const nextCursor =
@@ -248,10 +302,13 @@ async function fetchTransactionHistoryPage(
 
 export const getTransactionHistory = createAsyncThunk(
   "account/getTransactionHistory",
-  async (publicKey: string, { rejectWithValue }) => {
+  async (publicKey: string, { rejectWithValue, signal }) => {
     try {
-      return await fetchTransactionHistoryPage(publicKey);
+      return await fetchTransactionHistoryPage(publicKey, undefined, signal);
     } catch (error: unknown) {
+      if (signal.aborted) {
+        throw error;
+      }
       return rejectWithValue(
         (error as { message?: string }).message ||
           "Failed to fetch transaction history",
@@ -263,10 +320,13 @@ export const getTransactionHistory = createAsyncThunk(
 /** Refresh the newest page without dropping older pages already loaded. */
 export const refreshTransactionHistory = createAsyncThunk(
   "account/refreshTransactionHistory",
-  async (publicKey: string, { rejectWithValue }) => {
+  async (publicKey: string, { rejectWithValue, signal }) => {
     try {
-      return await fetchTransactionHistoryPage(publicKey);
+      return await fetchTransactionHistoryPage(publicKey, undefined, signal);
     } catch (error: unknown) {
+      if (signal.aborted) {
+        throw error;
+      }
       return rejectWithValue(
         (error as { message?: string }).message ||
           "Failed to refresh transaction history",
@@ -280,11 +340,14 @@ export const getOlderTransactionHistory = createAsyncThunk(
   "account/getOlderTransactionHistory",
   async (
     { publicKey, cursor }: { publicKey: string; cursor: string },
-    { rejectWithValue },
+    { rejectWithValue, signal },
   ) => {
     try {
-      return await fetchTransactionHistoryPage(publicKey, cursor);
+      return await fetchTransactionHistoryPage(publicKey, cursor, signal);
     } catch (error: unknown) {
+      if (signal.aborted) {
+        throw error;
+      }
       return rejectWithValue(
         (error as { message?: string }).message ||
           "Failed to load older transactions",
@@ -305,13 +368,14 @@ export const getAccountTransactions = createAsyncThunk(
       page?: number;
       limit?: number;
     },
-    { rejectWithValue },
+    { rejectWithValue, signal },
   ) => {
     try {
       const response = await apiService.getAccountTransactions(
         userId,
         page,
         limit,
+        signal,
       );
 
       if (!response.success) {
@@ -322,6 +386,9 @@ export const getAccountTransactions = createAsyncThunk(
 
       return response.data;
     } catch (error: unknown) {
+      if (signal.aborted) {
+        throw error;
+      }
       return rejectWithValue(
         (error as { message?: string }).message ||
           "Failed to fetch account transactions",
@@ -522,6 +589,17 @@ const accountSlice = createSlice({
         updatedAt: at,
       });
     },
+    setTransactionFilter: (
+      state,
+      action: PayloadAction<Partial<TransactionFilters>>,
+    ) => {
+      // Note: Filters are managed in component state, this is for consistency
+      // Can be used for persisting filters to Redux if needed in future
+    },
+    clearTransactionFilters: (state) => {
+      // Note: Filters are managed in component state, this is for consistency
+      // Can be used for persisting filters to Redux if needed in future
+    },
   },
 
   extraReducers: (builder) => {
@@ -705,6 +783,7 @@ const accountSlice = createSlice({
       })
       .addCase(getTransactionHistory.rejected, (state, action) => {
         state.transactions.isLoading = false;
+        if (action.meta.aborted) return;
         state.transactions.error =
           (action.payload as string) ||
           action.error.message ||
@@ -741,6 +820,7 @@ const accountSlice = createSlice({
       })
       .addCase(refreshTransactionHistory.rejected, (state, action) => {
         state.transactions.isRefreshing = false;
+        if (action.meta.aborted) return;
         state.transactions.refreshError =
           (action.payload as string) ||
           action.error.message ||
@@ -772,6 +852,7 @@ const accountSlice = createSlice({
       })
       .addCase(getOlderTransactionHistory.rejected, (state, action) => {
         state.transactions.isLoadingMore = false;
+        if (action.meta.aborted) return;
         state.transactions.loadMoreError =
           (action.payload as string) ||
           action.error.message ||
@@ -790,6 +871,7 @@ const accountSlice = createSlice({
       })
       .addCase(getAccountTransactions.rejected, (state, action) => {
         state.transactions.isLoading = false;
+        if (action.meta.aborted) return;
         state.transactions.error =
           (action.payload as string) ||
           action.error.message ||
@@ -849,6 +931,10 @@ const accountSlice = createSlice({
       });
   },
 });
+
+
+export const { clearError, updateAccountStatus, updateBalance, clearAccount, setTransactionFilter, clearTransactionFilters } =
+  accountSlice.actions;
 
 export const {
   clearError,

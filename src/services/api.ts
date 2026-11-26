@@ -6,7 +6,6 @@ import {
   logger,
   setCorrelationIdHeader,
 } from "../utils/logger";
-import { env } from '@/config/env';
 import {
   RegisterRequest,
   LoginRequest,
@@ -58,10 +57,26 @@ import {
 } from "@/utils/retryUtils";
 import { horizonFetch } from "@/utils/horizonFetch";
 import { buildPaymentIdempotencyKey } from "@/utils/paymentIdempotency";
+import type { NotificationPreferences } from "@/types/notificationPreferences";
 import {
   PaymentOutcomeUnknownError,
   isPaymentOutcomeUnknown,
 } from "@/utils/paymentOutcome";
+import {
+  apiResponseSchema,
+  balanceResponseSchema,
+  contactDeleteResponseSchema,
+  contactResponseEnvelopeSchema,
+  contactsResponseSchema,
+  fundedAccountBalanceResponseSchema,
+  loginResponseSchema,
+  parseBackendResponse,
+  reauthenticationResponseSchema,
+  registerResponseSchema,
+  refreshTokenResponseSchema,
+  transactionPageResponseSchema,
+  userResponseSchema,
+} from "@/utils/validation";
 
 /**
  * Local trustline types keep this service independent of whether the
@@ -453,18 +468,17 @@ export class ApiService {
       data,
     );
 
-    const registrationData = response.data as RegisterResponse & {
-      data?: { token?: string };
-    };
+    const registrationData = parseBackendResponse(
+      "POST /auth/register",
+      registerResponseSchema,
+      response.data,
+    );
 
-    if (
-      registrationData.success &&
-      registrationData.data?.token
-    ) {
+    if (registrationData.data.token) {
       this.setToken(registrationData.data.token);
     }
 
-    return response.data;
+    return registrationData;
   }
 
   /**
@@ -477,9 +491,11 @@ export class ApiService {
       { headers: { "Content-Type": "application/json" } },
     );
 
-    if (!response.data?.success) {
-      throw new Error(response.data?.message || "Re-authentication failed");
-    }
+    parseBackendResponse(
+      "POST /auth/login (reauthentication)",
+      reauthenticationResponseSchema,
+      response.data,
+    );
   }
 
   /**
@@ -506,12 +522,17 @@ export class ApiService {
       "/auth/login",
       data,
     );
+    const loginData = parseBackendResponse(
+      "POST /auth/login",
+      loginResponseSchema,
+      response.data,
+    );
 
-    if (response.data.success && response.data.data.token) {
-      this.setToken(response.data.data.token);
+    if (loginData.data.token) {
+      this.setToken(loginData.data.token);
     }
 
-    return response.data;
+    return loginData;
   }
 
   async googleAuth(token: string): Promise<LoginResponse> {
@@ -519,12 +540,17 @@ export class ApiService {
       "/auth/google-auth",
       { token },
     );
+    const loginData = parseBackendResponse(
+      "POST /auth/google-auth",
+      loginResponseSchema,
+      response.data,
+    );
 
-    if (response.data.success && response.data.data.token) {
-      this.setToken(response.data.data.token);
+    if (loginData.data.token) {
+      this.setToken(loginData.data.token);
     }
 
-    return response.data;
+    return loginData;
   }
 
   async verifyEmail(
@@ -622,7 +648,7 @@ export class ApiService {
   }
 
   async refreshToken(): Promise<{ token: string }> {
-    const response = await axios.post<{ token: string }>(
+    const response = await axios.post<unknown>(
       `${this.api.defaults.baseURL}/auth/refresh`,
       {},
       {
@@ -631,11 +657,13 @@ export class ApiService {
       },
     );
 
-    if (response.data?.token) {
-      this.setToken(response.data.token);
-    }
-
-    return response.data;
+    const refreshed = parseBackendResponse(
+      "POST /auth/refresh",
+      refreshTokenResponseSchema,
+      response.data,
+    );
+    this.setToken(refreshed.token);
+    return refreshed;
   }
 
   // Protected profile endpoints
@@ -645,7 +673,11 @@ export class ApiService {
       "/auth/me",
     );
 
-    return response.data;
+    return parseBackendResponse(
+      "GET /auth/me",
+      apiResponseSchema(userResponseSchema),
+      response.data,
+    );
   }
 
   async getProfile(): Promise<ApiResponse<User>> {
@@ -653,7 +685,11 @@ export class ApiService {
       "/auth/profile",
     );
 
-    return response.data;
+    return parseBackendResponse(
+      "GET /auth/profile",
+      apiResponseSchema(userResponseSchema),
+      response.data,
+    );
   }
 
   async updateProfile(
@@ -664,7 +700,11 @@ export class ApiService {
       data,
     );
 
-    return response.data;
+    return parseBackendResponse(
+      "PUT /auth/profile",
+      apiResponseSchema(userResponseSchema),
+      response.data,
+    );
   }
 
   /**
@@ -702,6 +742,45 @@ export class ApiService {
       '/auth/reauthenticate',
       { password },
       { withCredentials: true },
+    );
+    return response.data;
+  }
+
+  /**
+   * Saved notification preferences for the current user (#301).
+   * Proposed contract: `GET /users/me/notification-preferences` →
+   * `{ "transactions": boolean, "chat": boolean }`.
+   *
+   * @throws {AxiosError} 404/501 when the backend does not support preferences yet.
+   */
+  async getNotificationPreferences(): Promise<NotificationPreferences> {
+    const response = await this.api.get<NotificationPreferences>("/users/me/notification-preferences");
+    return response.data;
+  }
+
+  /**
+   * Save notification preferences (#301). Proposed: `PUT /users/me/notification-preferences`
+   * with the full object; responds with the saved object.
+   */
+  async updateNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences> {
+    const response = await this.api.put<NotificationPreferences>("/users/me/notification-preferences", preferences);
+    return response.data;
+  }
+
+  /**
+   * Translate a message on demand (#83).
+   * Proposed contract: `POST /translate` `{ text, targetLanguage }` →
+   * `{ translatedText, detectedLanguage? }`.
+   *
+   * @throws {AxiosError} When the request fails; 404/501 means translation is not supported.
+   */
+  async translateText(
+    text: string,
+    targetLanguage: string,
+  ): Promise<{ translatedText: string; detectedLanguage?: string }> {
+    const response = await this.api.post<{ translatedText: string; detectedLanguage?: string }>(
+      "/translate",
+      { text, targetLanguage },
     );
     return response.data;
   }
@@ -781,7 +860,11 @@ export class ApiService {
       "/auth/starknet/balance",
     );
 
-    return response.data;
+    return parseBackendResponse(
+      "GET /auth/starknet/balance",
+      balanceResponseSchema,
+      response.data,
+    );
   }
 
   async getAccountStatus(): Promise<
@@ -841,7 +924,11 @@ export class ApiService {
       ApiResponse<{ balance: string; hasBalance: boolean }>
     >("/auth/funding/funded-account-balance");
 
-    return response.data;
+    return parseBackendResponse(
+      "GET /auth/funding/funded-account-balance",
+      fundedAccountBalanceResponseSchema,
+      response.data,
+    );
   }
 
   async batchFund(
@@ -889,6 +976,7 @@ export class ApiService {
     userId: string,
     page = 1,
     limit = 10,
+    signal?: AbortSignal,
   ): Promise<
     ApiResponse<{
       transactions: StellarTransaction[];
@@ -898,6 +986,13 @@ export class ApiService {
     }>
   > {
     try {
+      const requestConfig: AxiosRequestConfig = {
+        params: { userId, page, limit },
+      };
+      if (signal) {
+        requestConfig.signal = signal;
+      }
+
       const response = await this.api.get<
         ApiResponse<{
           transactions: StellarTransaction[];
@@ -905,11 +1000,13 @@ export class ApiService {
           page: number;
           limit: number;
         }>
-      >("/account/transactions", {
-        params: { userId, page, limit },
-      });
+      >("/account/transactions", requestConfig);
 
-      return response.data;
+      return parseBackendResponse(
+        "GET /account/transactions",
+        transactionPageResponseSchema,
+        response.data,
+      );
     } catch (error: unknown) {
       // Try the alternative route used by older backend implementations
       // only when the primary route is not found.
@@ -918,6 +1015,13 @@ export class ApiService {
         error.response?.status !== 404
       ) {
         throw error;
+      }
+
+      const fallbackConfig: AxiosRequestConfig = {
+        params: { page, limit },
+      };
+      if (signal) {
+        fallbackConfig.signal = signal;
       }
 
       const response = await this.api.get<
@@ -929,10 +1033,14 @@ export class ApiService {
         }>
       >(
         `/account/${encodeURIComponent(userId)}/transactions`,
-        { params: { page, limit } },
+        fallbackConfig,
       );
 
-      return response.data;
+      return parseBackendResponse(
+        "GET /account/{userId}/transactions",
+        transactionPageResponseSchema,
+        response.data,
+      );
     }
   }
 
@@ -1045,13 +1153,17 @@ export class ApiService {
 
   // Contact management
 
-  async getContacts(): Promise<ApiResponse<Contact[]>> {
+  async getContacts(signal?: AbortSignal): Promise<ApiResponse<Contact[]>> {
     try {
-      const response = await this.api.get<ApiResponse<Contact[]>>(
-        "/contacts",
-      );
+      const response = signal
+        ? await this.api.get<ApiResponse<Contact[]>>("/contacts", { signal })
+        : await this.api.get<ApiResponse<Contact[]>>("/contacts");
 
-      return response.data;
+      return parseBackendResponse(
+        "GET /contacts",
+        contactsResponseSchema,
+        response.data,
+      );
     } catch (error: unknown) {
       if (
         axios.isAxiosError(error) &&
@@ -1078,7 +1190,11 @@ export class ApiService {
         data,
       );
 
-      return response.data;
+      return parseBackendResponse(
+        "POST /contacts",
+        contactResponseEnvelopeSchema,
+        response.data,
+      );
     } catch (error: unknown) {
       if (
         axios.isAxiosError(error) &&
@@ -1106,7 +1222,11 @@ export class ApiService {
         data,
       );
 
-      return response.data;
+      return parseBackendResponse(
+        "PUT /contacts/{id}",
+        contactResponseEnvelopeSchema,
+        response.data,
+      );
     } catch (error: unknown) {
       if (
         axios.isAxiosError(error) &&
@@ -1132,7 +1252,11 @@ export class ApiService {
         ApiResponse<{ message: string }>
       >(`/contacts/${encodeURIComponent(id)}`);
 
-      return response.data;
+      return parseBackendResponse(
+        "DELETE /contacts/{id}",
+        contactDeleteResponseSchema,
+        response.data,
+      );
     } catch (error: unknown) {
       if (
         axios.isAxiosError(error) &&
@@ -1176,29 +1300,7 @@ export class ApiService {
     return response.data;
   }
 
-  // Agent query - Optimized for backend integration  /**
-   * Send a query to the AI agent. Attempts connected experimental agent service first, falling back to backend `/query`.
-   * Does NOT throw on backend/execution error; catches exceptions and returns a resolved `AgentQueryResponse` object with `success: false` and friendly message.
-   *
-   * @param data - Request payload containing user query string.
-   * @returns Promise resolving to `AgentQueryResponse` containing result envelope.
-   *
-   * @example
-   * ```ts
-   * import { apiService } from '@/services/api';
-   * 
-   * const response = await apiService.queryAgent({ query: 'Swap 10 XLM for USDC' });
-   * if (response.result.success) {
-   *   console.log('Agent output:', response.result.data);
-   * } else {
-   *   console.error('Agent query error:', response.result.error);
-   * }
-   * ```
-   */
-  async queryAgent(data: AgentQueryRequest): Promise<AgentQueryResponse> {
-    // First try the experimental agent service
   // Agent query
-
   async queryAgent(
     data: AgentQueryRequest,
     options?: { onDelta?: (text: string) => void; signal?: AbortSignal },
