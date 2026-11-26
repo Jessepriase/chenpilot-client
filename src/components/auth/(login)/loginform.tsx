@@ -25,7 +25,7 @@ interface LoginFormData {
 export default function LoginForm() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { isLoading } = useAppSelector((state) => state.auth);
+  const { isLoading, error } = useAppSelector((state) => state.auth);
   const [showPassword, setShowPassword] = useState(false);
   // Translated workflow strings (#292)
   const { t, tv, language } = useT();
@@ -169,6 +169,10 @@ export default function LoginForm() {
             {t("auth.forgotPassword")}
           </Link>
         </div>
+
+        {error && (
+          <p className="mt-2 text-xs text-red-400 font-light">{error}</p>
+        )}
 
         <Button
           type="submit"

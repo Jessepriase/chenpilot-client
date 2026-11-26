@@ -28,6 +28,7 @@ interface RegisterFormData {
 export function RegisterForm() {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const { error } = useAppSelector((state) => state.auth);
   const [showPassword, setShowPassword] = useState(false);
   // Translated workflow strings (#292)
   const { t, tv, language } = useT();
@@ -223,6 +224,10 @@ export function RegisterForm() {
             </a>
           </label>
         </div>
+
+        {error && (
+          <p className="mt-2 text-xs text-red-400 font-light">{error}</p>
+        )}
 
         <Button
           type="submit"
