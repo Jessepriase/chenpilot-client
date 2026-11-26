@@ -78,6 +78,8 @@ These routes use `NEXT_PUBLIC_AGENT_API_URL` through `AgentService`, except `api
 
 The service includes methods for Stellar/Starknet account and funding paths, but most similarly named Redux account thunks currently return mock values. `getAccountTransactions` is the exception and is used by the account transaction flow.
 
+The `StellarTransaction` data model includes a `status` field that can be `'success'`, `'pending'`, or `'failed'`, distinct from the boolean `successful` flag which indicates whether the transaction settled on chain. The status filter on the transaction history page allows users to narrow results by outcome.
+
 | Endpoint | Request example | Success response example | UI surface / behavior |
 | --- | --- | --- | --- |
 | `POST /auth/starknet/deploy` | `{}` | `{"success":true,"data":{"transactionHash":"0xabc","contractAddress":"0xdef"}}` | Service method only; deploy thunk currently returns mock data. |

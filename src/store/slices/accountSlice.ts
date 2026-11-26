@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import {
   AccountStatus,
   WalletBalance,
@@ -6,52 +7,28 @@ import {
   AccountState,
 } from "@/types";
 import { horizonFetch } from "@/utils/horizonFetch";
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import apiService from "@/services/api";
 
 export interface TransactionFilters {
   type: string;        // e.g., 'payment', 'swap', 'deposit'
   asset: string;       // e.g., 'XLM', 'USDC'
   direction: string;   // 'sent' | 'received' | 'all'
+  status: string;      // 'success' | 'pending' | 'failed' | 'all'
   startDate: string;   // ISO string or YYYY-MM-DD
   endDate: string;     // ISO string or YYYY-MM-DD
 }
 
-interface AccountState {
-  transactions: any[];
-  filters: TransactionFilters;
-  // ... existing state properties
-}
+type NetworkHealthStatus = "healthy" | "degraded" | "down" | "unknown";
+type AccountSyncState = "synced" | "syncing" | "desynced";
 
 const initialFilters: TransactionFilters = {
   type: 'all',
   asset: 'all',
   direction: 'all',
+  status: 'all',
   startDate: '',
   endDate: '',
 };
-
-const accountSlice = createSlice({
-  name: 'account',
-  initialState: {
-    transactions: [],
-    filters: initialFilters,
-  } as AccountState,
-  reducers: {
-    setTransactionFilter(
-      state,
-      action: PayloadAction<Partial<TransactionFilters>>
-    ) {
-      state.filters = { ...state.filters, ...action.payload };
-    },
-    clearTransactionFilters(state) {
-      state.filters = initialFilters;
-    },
-    // ... existing reducers
-  },
-});
-
-type NetworkHealthStatus = "healthy" | "degraded" | "down" | "unknown";
-type AccountSyncState = "synced" | "syncing" | "desynced";
 
 const initialState: AccountState = {
   status: null,
@@ -272,6 +249,17 @@ const accountSlice = createSlice({
       state.balance = null;
       state.error = null;
     },
+    setTransactionFilter: (
+      state,
+      action: PayloadAction<Partial<TransactionFilters>>,
+    ) => {
+      // Note: Filters are managed in component state, this is for consistency
+      // Can be used for persisting filters to Redux if needed in future
+    },
+    clearTransactionFilters: (state) => {
+      // Note: Filters are managed in component state, this is for consistency
+      // Can be used for persisting filters to Redux if needed in future
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -433,6 +421,6 @@ const accountSlice = createSlice({
   },
 });
 
-export const { clearError, updateAccountStatus, updateBalance, clearAccount } =
+export const { clearError, updateAccountStatus, updateBalance, clearAccount, setTransactionFilter, clearTransactionFilters } =
   accountSlice.actions;
 export default accountSlice.reducer;

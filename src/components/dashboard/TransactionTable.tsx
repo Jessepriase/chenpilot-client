@@ -74,6 +74,42 @@ export default function TransactionTable({
     return mainOp.amount ? `${formatTokenAmount(mainOp.amount, 2)} ${mainOp.asset}` : null;
   };
 
+  const getStatusDisplay = (tx: StellarTransaction) => {
+    // Use explicit status field if available, otherwise derive from successful flag
+    const status = tx.status || (tx.successful ? 'success' : 'failed');
+    
+    switch (status) {
+      case 'success':
+        return (
+          <div className="flex items-center space-x-1">
+            <Check className="h-4 w-4 text-green-400" />
+            <span className="text-green-400 font-medium">Success</span>
+          </div>
+        );
+      case 'pending':
+        return (
+          <div className="flex items-center space-x-1">
+            <Loader2 className="h-4 w-4 text-yellow-400 animate-spin" />
+            <span className="text-yellow-400 font-medium">Pending</span>
+          </div>
+        );
+      case 'failed':
+        return (
+          <div className="flex items-center space-x-1">
+            <AlertCircle className="h-4 w-4 text-red-400" />
+            <span className="text-red-400 font-medium">Failed</span>
+          </div>
+        );
+      default:
+        return (
+          <div className="flex items-center space-x-1">
+            <AlertCircle className="h-4 w-4 text-gray-400" />
+            <span className="text-gray-400 font-medium">Unknown</span>
+          </div>
+        );
+    }
+  };
+
   if (error) {
     return (
       <Card>
@@ -202,17 +238,7 @@ export default function TransactionTable({
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    {tx.successful ? (
-                      <div className="flex items-center space-x-1">
-                        <Check className="h-4 w-4 text-green-400" />
-                        <span className="text-green-400 font-medium">Success</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-1">
-                        <AlertCircle className="h-4 w-4 text-red-400" />
-                        <span className="text-red-400 font-medium">Failed</span>
-                      </div>
-                    )}
+                    {getStatusDisplay(tx)}
                   </td>
                   <td className="py-3 px-4 text-right">
                     <a

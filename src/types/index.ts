@@ -145,6 +145,7 @@ export interface StellarTransaction {
   fee_charged: string;
   operation_count: number;
   successful: boolean;
+  status?: 'success' | 'pending' | 'failed';
   operations: StellarOperation[];
 }
 
