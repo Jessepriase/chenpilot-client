@@ -8,3 +8,8 @@
 
 - `setTheme` / `toggleTheme` (theme toggle): explicit choice, persisted.
 - `applyTheme` (`ThemeProvider`): system-derived, not persisted.
+
+# Server Rendering & Hydration (#305)
+
+- **SSR Safety:** `ThemeProvider` renders without `window`, `document`, or `localStorage` during server rendering (`renderToString`) without hydration mismatches.
+- **Unavailable APIs:** Handles missing `window.matchMedia`, null query results, legacy `addListener` / `removeListener` interfaces, and storage access denials (`SecurityError`) gracefully without throwing.
