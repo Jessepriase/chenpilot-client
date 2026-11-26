@@ -4,8 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { updateAgentStatus } from '@/store/slices/chatSlice';
 import { 
-  Wifi, 
-  WifiOff, 
   Activity, 
   Zap, 
   DollarSign, 
@@ -170,7 +168,11 @@ export default function AgentStatus({ className = '', showDetails = false }: Age
     return (
       <div className={`flex items-center space-x-2 ${className}`}>
         {getStatusIcon()}
-        <span className={`text-sm font-medium ${getStatusColor()}`}>
+        <span
+          role="status"
+          aria-live="polite"
+          className={`text-sm font-medium ${getStatusColor()}`}
+        >
           {getStatusText()}
         </span>
       </div>
@@ -182,7 +184,11 @@ export default function AgentStatus({ className = '', showDetails = false }: Age
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
           {getStatusIcon()}
-          <span className={`text-sm font-medium ${getStatusColor()}`}>
+          <span
+            role="status"
+            aria-live="polite"
+            className={`text-sm font-medium ${getStatusColor()}`}
+          >
             {getStatusText()}
           </span>
         </div>
@@ -192,6 +198,7 @@ export default function AgentStatus({ className = '', showDetails = false }: Age
           disabled={isLoading}
           className="p-1 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
           title="Refresh status"
+          aria-label="Refresh agent status"
         >
           <Activity className="h-4 w-4" />
         </button>
