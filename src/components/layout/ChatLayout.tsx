@@ -4,14 +4,10 @@ import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { logout } from "@/store/slices/authSlice";
-import { toggleTheme } from "@/store/slices/uiSlice";
 import {
-  clearMessages,
   startNewChat,
   loadChatHistory,
-  deleteChatHistory,
   loadConversationsLocally,
-  deleteConversationLocally,
   setCurrentConversation,
 } from "@/store/slices/chatSlice";
 import { ConversationManager } from "@/components/chat/ConversationManager";
@@ -31,7 +27,6 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const pathname = usePathname();
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
-  const theme = useAppSelector((state) => state.ui) || { mode: "dark" };
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -70,20 +65,16 @@ export function ChatLayout({ children }: ChatLayoutProps) {
       .slice(0, 10); // Show last 10 conversations
   }, [chatHistory]);
 
-  const profileMenuItems = [
-    {
-      name: "Dashboard",
-      href: "/dashboard",
-    },
-    {
-      name: "Contacts",
-      href: "/contacts",
-    },
-    {
-      name: "Settings",
-      href: "/settings",
-    },
+  const navItems = [
+    { name: "Chat", href: "/chat" },
+    { name: "Dashboard", href: "/dashboard" },
+    { name: "Contacts", href: "/contacts" },
+    { name: "Settings", href: "/settings" },
   ];
+
+  const isNavItemActive = (href: string) => pathname.startsWith(href);
+
+  const profileMenuItems = navItems.filter((item) => item.href !== "/chat");
 
   const handleNewChat = () => {
     // Start new chat - this will save current conversation and clear messages
@@ -101,15 +92,6 @@ export function ChatLayout({ children }: ChatLayoutProps) {
     setSidebarOpen(false);
   };
 
-  const handleDeleteChat = (
-    conversationId: string,
-    event: React.MouseEvent,
-  ) => {
-    event.stopPropagation();
-    dispatch(deleteConversationLocally(conversationId));
-    toast.success("Chat deleted");
-  };
-
   const handleNavigation = (href: string) => {
     router.push(href);
     setSidebarOpen(false);
@@ -121,17 +103,13 @@ export function ChatLayout({ children }: ChatLayoutProps) {
       await dispatch(logout()).unwrap();
       toast.success("Successfully logged out!");
       router.push("/auth/login");
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage =
         error instanceof Error
           ? error.message
           : String(error || "Logout failed");
       toast.error(errorMessage);
     }
-  };
-
-  const handleThemeToggle = () => {
-    dispatch(toggleTheme());
   };
 
   // Load conversations from localStorage on component mount
@@ -260,8 +238,12 @@ export function ChatLayout({ children }: ChatLayoutProps) {
           <div className="px-4 py-4">
             <Button
               onClick={handleNewChat}
+              aria-current={isNavItemActive("/chat") ? "page" : undefined}
               className={cn(
-                "w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-medium py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl",
+                "w-full font-medium py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl",
+                isNavItemActive("/chat")
+                  ? "bg-purple-500 hover:bg-purple-500 text-white shadow-purple-500/30"
+                  : "bg-[#7C3AED] hover:bg-[#6D28D9] text-white",
                 sidebarCollapsed ? "px-3" : "px-4",
               )}
             >
@@ -350,11 +332,18 @@ export function ChatLayout({ children }: ChatLayoutProps) {
               {profileMenuOpen && !sidebarCollapsed && (
                 <div className="absolute bottom-full left-0 right-0 mb-2 bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
                   {profileMenuItems.map((item) => {
+                    const active = isNavItemActive(item.href);
                     return (
                       <button
                         key={item.name}
                         onClick={() => handleNavigation(item.href)}
-                        className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-700/50 transition-all duration-200"
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "w-full flex items-center space-x-3 px-4 py-3 text-sm transition-all duration-200",
+                          active
+                            ? "bg-purple-700/40 text-white font-medium border-l-2 border-purple-400"
+                            : "text-gray-200 hover:bg-gray-700/50",
+                        )}
                       >
                         <span>{item.name}</span>
                       </button>
