@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import Link from 'next/link';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setOnlineStatus, loadMessageQueue, fetchChatHistory } from '@/store/slices/chatSlice';
 import { WifiOff, Wifi } from 'lucide-react';
@@ -53,7 +54,8 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
   const { isOnline, messageQueue, dataSource, lastSyncedAt } = useAppSelector((state) => state.chat);
   const [connectionRestored, setConnectionRestored] = React.useState(false);
   const socket = useOptionalSocket();
-  const socketState: SocketConnectionState = socket?.connectionState ?? 'unknown';
+  // `idle` is the documented initial state; there is no 'unknown' member (#553).
+  const socketState: SocketConnectionState = socket?.connectionState ?? 'idle';
   const socketMessage = isSocketStatusVisible(socketState)
     ? describeSocketState(socketState, socket?.reconnectAttempt, socket?.maxReconnectAttempts)
     : null;
@@ -144,6 +146,9 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
               ? ` • ${messageQueue.length} message${messageQueue.length !== 1 ? 's' : ''} queued`
               : ''}
           </span>
+          <Link href="/offline" className="underline whitespace-nowrap">
+            What works offline
+          </Link>
         </>
       )}
     </div>
