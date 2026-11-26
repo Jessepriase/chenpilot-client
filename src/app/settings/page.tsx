@@ -586,6 +586,21 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteAccountOpen}
+        onClose={() => setIsDeleteAccountOpen(false)}
+        title="Delete Account"
+        confirmLabel="Delete Account"
+        cancelLabel="Cancel"
+        onConfirm={handleDeleteAccount}
+        danger
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          This will permanently delete your account and all associated data. This action cannot be undone.
+        </p>
+      </Modal>
     </ChatLayout>
   );
 }

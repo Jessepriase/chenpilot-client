@@ -45,6 +45,8 @@ export default function ContactsPage() {
     address: '',
     tokenType: 'XLM',
   });
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteConfirmContact, setDeleteConfirmContact] = useState<Contact | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -331,6 +333,7 @@ export default function ContactsPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      aria-label="Delete contact"
                       onClick={() => handleDeleteContact(contact)}
                       className="text-red-600 hover:text-red-700"
                     >
@@ -492,6 +495,24 @@ export default function ContactsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Contact Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeleteConfirmContact(null);
+        }}
+        title="Delete Contact"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmDeleteContact}
+        danger
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          This will permanently remove <strong>{deleteConfirmContact?.name}</strong> from your contacts. This action cannot be undone.
+        </p>
       </Modal>
       </div>
     </ChatLayout>
