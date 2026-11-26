@@ -290,7 +290,7 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
             <label htmlFor="send-amount" className="block text-sm font-medium text-gray-300 mb-2">
               {t("payment.amount")}
             </label>
-            <div className="flex space-x-2">
+            <div className="form-row-wrap">
               <Input
                 id="send-amount"
                 {...register('amount')}
