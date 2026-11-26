@@ -10,6 +10,10 @@ import {
   extractCorrelationId,
 } from "../utils/logger";
 import {
+  assertNotAborted,
+  isCancellationError,
+} from "../utils/agentCancellation";
+import {
   AgentQueryRequest,
   AgentQueryResponse,
   AgentStatus,
@@ -38,10 +42,6 @@ export interface AgentStreamOptions {
   /** Aborting cancels the request and stops further `onDelta` calls. */
   signal?: AbortSignal;
 }
-
-const isAbortError = (error: unknown): boolean =>
-  (error as { name?: string } | null)?.name === 'AbortError' ||
-  (error as { name?: string } | null)?.name === 'CanceledError';
 
 import { parseAgentEnvelope, protocolErrorResult } from './agentEnvelope';
 
@@ -612,6 +612,8 @@ class AgentService {
    * ```
    */
   async queryAgent(request: AgentQueryRequest, options?: { signal?: AbortSignal }): Promise<AgentQueryResponse> {
+    // A caller that cancelled before dispatch must not trigger any client work (#543).
+    assertNotAborted(options?.signal);
     // The correlation id doubles as the client request id the backend can report status for (#274).
     const correlationId = request.clientRequestId ?? generateCorrelationId('agent_query');
     const stateChanging = isStateChangingQuery(request.query);
@@ -631,6 +633,9 @@ class AgentService {
           headers: { [CORRELATION_ID_HEADER]: correlationId },
         }
       );
+
+      // Do not turn a response that arrived after cancellation into a success.
+      assertNotAborted(options?.signal);
 
       logger.debug(
         '[AgentService] Query response:',
@@ -676,11 +681,7 @@ class AgentService {
         response?: { data?: { message?: string } };
       };
       // A user-cancelled request (Stop button / navigation) propagates as an abort, not a failure
-      if (
-        axiosError.code === 'ERR_CANCELED' ||
-        axiosError.name === 'CanceledError' ||
-        axiosError.name === 'AbortError'
-      ) {
+      if (isCancellationError(error) || options?.signal?.aborted) {
         throw error;
       }
 
@@ -753,10 +754,12 @@ class AgentService {
     } catch (error) {
       if (error instanceof StreamingUnsupportedError) {
         this.streamingSupported = false;
+        // A cancelled caller must never be silently replayed through the fallback.
+        assertNotAborted(options.signal);
         logger.debug('[AgentService] Streaming unsupported, falling back to /query');
         return this.queryAgent(request, { signal: options.signal });
       }
-      if (isAbortError(error) || options.signal?.aborted) {
+      if (isCancellationError(error) || options.signal?.aborted) {
         throw error;
       }
       logger.error('[AgentService] Stream failed:', describeAgentError(error));
@@ -810,14 +813,13 @@ class AgentService {
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (signal?.aborted) {
-          throw new DOMException('The operation was aborted.', 'AbortError');
-        }
+        assertNotAborted(signal);
         const chunk = done ? decoder.decode() : decoder.decode(value, { stream: true });
         for (const message of parser.push(done ? `${chunk}\n\n` : chunk)) {
           const event = toStreamEvent(message);
           if (!event) continue;
           if (event.type === 'delta') {
+            assertNotAborted(signal);
             if (text.apply(event)) onDelta?.(text.value);
           } else if (event.type === 'final') {
             return { result: event.result };

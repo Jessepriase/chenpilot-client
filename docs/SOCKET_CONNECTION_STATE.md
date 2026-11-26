@@ -23,3 +23,16 @@ consumer reads that single `SocketConnectionState` union (#279).
 Tests: `src/types/socket.test.ts` (model and initial state),
 `src/components/providers/SocketProvider.test.tsx` (transitions), and
 `src/components/chat/OfflineIndicator.socket.test.tsx` (status UI).
+
+## Event payload version compatibility (#538)
+
+Real-time payloads use the envelope `{ version, event, data }`. The current supported version is **v1**; it is published as `SOCKET_EVENT_VERSION` and `SUPPORTED_SOCKET_EVENT_VERSIONS` in `src/services/socketEventVersion.ts`.
+
+| Payload | Behavior |
+| ------- | -------- |
+| `version` is a supported integer | Accepted and handed to state-updating listeners. |
+| No `version` field | Treated as legacy v1 for backwards compatibility. |
+| Unknown integer version | **Dropped**. The client does not guess at a newer schema. |
+| Malformed version (string, fraction, non-object payload) | **Dropped** as invalid. |
+
+`classifySocketEventVersion()` returns only version metadata and a reason string; it never echoes payload content into diagnostics. Unknown-version events are ignored rather than applied, so an older client cannot corrupt chat or presence state with data it cannot interpret. Contract tests: `src/services/__tests__/socketEventVersion.test.ts`.
