@@ -6,7 +6,6 @@ import {
   logger,
   setCorrelationIdHeader,
 } from "../utils/logger";
-import { env } from '@/config/env';
 import {
   RegisterRequest,
   LoginRequest,
@@ -58,8 +57,8 @@ import {
 } from "@/utils/retryUtils";
 import { horizonFetch } from "@/utils/horizonFetch";
 import { buildPaymentIdempotencyKey } from "@/utils/paymentIdempotency";
-import {
 import type { NotificationPreferences } from "@/types/notificationPreferences";
+import {
   PaymentOutcomeUnknownError,
   isPaymentOutcomeUnknown,
 } from "@/utils/paymentOutcome";

@@ -19,6 +19,7 @@ vi.mock('@/components/ui/Input', () => ({
 }));
 
 vi.mock('@/store', () => ({
+  useAppDispatch: () => vi.fn(),
   useAppSelector: (selector: (state: { ui: { language: Language } }) => unknown) =>
     selector({ ui: { language: mockLanguage } }),
 }));

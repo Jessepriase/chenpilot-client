@@ -20,3 +20,8 @@ The language preference store is `src/lib/i18n/languagePreference.ts`. Both keys
 - **Saving:** `setLanguage` saves for the signed-in user, or as the device preference when signed out.
 - **Before content renders:** `LANGUAGE_INIT_SCRIPT` is inlined in `<head>` (`src/app/layout.tsx`) and sets `<html lang>`, `dir` and the `rtl` class. The Redux initial state is read from the same store, so the first render already uses the right language.
 - **No leaking between users:** when the signed-in user changes, `LanguageProvider` dispatches `applyLanguage(readLanguagePreference(userId))`. Signing in restores that user's choice, and signing out returns to the device preference.
+
+# Server Rendering & Hydration (#305)
+
+- **SSR Safety:** `LanguageProvider` safely renders without `window`, `document`, or `localStorage` during server rendering (`renderToString`). Default and saved preferences hydrate cleanly with zero React hydration warnings.
+- **Unavailable APIs:** Handles missing storage or security access denials gracefully, falling back to default English LTR formatting.
