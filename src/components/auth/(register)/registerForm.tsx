@@ -30,7 +30,7 @@ export function RegisterForm() {
   const dispatch = useAppDispatch();
   const [showPassword, setShowPassword] = useState(false);
   // Translated workflow strings (#292)
-  const { t, tv } = useT();
+  const { t, tv, language } = useT();
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
   const {
@@ -68,7 +68,7 @@ export function RegisterForm() {
       // to inputs only when they can't reveal whether an account exists (e.g. password rules) (#258).
       // Name and email are kept; terminal failures clear and refocus the password, transient ones
       // keep it for an easy resubmit (#253).
-      const message = authService.normalizeRegisterError(error);
+      const message = tv(authService.normalizeRegisterError(error, language));
       toast.error(message, SILENT_TOAST);
       setAnnouncement({ text: message, tone: "assertive" });
       applyAuthErrors(error, REGISTER_FIELDS, setError, [data.password], { hideAccountExistence: true });

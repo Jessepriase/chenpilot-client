@@ -5,13 +5,15 @@ import { cn } from '@/utils/cn';
 import { InputProps } from '@/types';
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, helperText, required, disabled, className, ...props }, ref) => {
+  ({ label, error, helperText, required, disabled, className, id, ...props }, ref) => {
+    const generatedId = React.useId();
+    const inputId = id || (label ? generatedId : undefined);
     const ariaLabel = props['aria-label'] ?? label ?? undefined;
 
     return (
       <div className="w-full">
         {label && (
-          <label htmlFor={props.id} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label htmlFor={inputId} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -26,6 +28,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           )}
           disabled={disabled}
           aria-label={ariaLabel}
+          aria-invalid={error ? 'true' : undefined}
           {...props}
         />
         {error && (

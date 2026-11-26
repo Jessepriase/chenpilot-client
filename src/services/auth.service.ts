@@ -1,5 +1,6 @@
 import apiService, { singleFlight } from './api';
 import type { ApiResponse } from '@/types';
+import { translateNotification, type Language } from '@/lib/i18n/i18n';
 
 const REAUTHENTICATION_WINDOW_MS = 5 * 60 * 1000;
 
@@ -296,7 +297,7 @@ export async function withRecentAuth<T>(
  * such as state persistence in local browser storage and session destruction.
  */
 /** Raw failure detail for internal logs only; never shown to the user. */
-function describeRawAuthError(error: unknown): string {
+export function describeRawAuthError(error: unknown): string {
   if (typeof error === 'string') return error;
   const e = error as { message?: string; response?: { status?: number; data?: { message?: unknown } } } | null | undefined;
   const parts = [
@@ -315,15 +316,15 @@ class AuthService {
    * password, unknown user, 401 and network errors, becomes `GENERIC_AUTH_ERROR`. The raw reason
    * is logged internally only. See docs/API_CONTRACT.md "Privacy-Safe Authentication Errors".
    */
-  normalizeLoginError(error: unknown): string {
+  normalizeLoginError(error: unknown, lang?: Language): string {
     console.error('[auth] login error (internal):', describeRawAuthError(error));
-    return GENERIC_AUTH_ERROR;
+    return lang ? translateNotification(lang, GENERIC_AUTH_ERROR) : GENERIC_AUTH_ERROR;
   }
 
   /** Privacy-safe registration error: every failure becomes `GENERIC_REGISTER_ERROR`. */
-  normalizeRegisterError(error: unknown): string {
+  normalizeRegisterError(error: unknown, lang?: Language): string {
     console.error('[auth] register error (internal):', describeRawAuthError(error));
-    return GENERIC_REGISTER_ERROR;
+    return lang ? translateNotification(lang, GENERIC_REGISTER_ERROR) : GENERIC_REGISTER_ERROR;
   }
 
   /**
@@ -576,4 +577,4 @@ export const authService = new AuthService();
 export default authService;
 
 // Exported for unit tests only — not part of the public API surface.
-export { GENERIC_AUTH_ERROR, GENERIC_REGISTER_ERROR, ACCOUNT_EXISTENCE_PATTERNS };
+export { GENERIC_AUTH_ERROR, GENERIC_REGISTER_ERROR, GENERIC_FORM_ERROR, ACCOUNT_EXISTENCE_PATTERNS };

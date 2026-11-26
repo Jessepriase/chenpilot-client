@@ -28,7 +28,7 @@ export default function LoginForm() {
   const { isLoading } = useAppSelector((state) => state.auth);
   const [showPassword, setShowPassword] = useState(false);
   // Translated workflow strings (#292)
-  const { t, tv } = useT();
+  const { t, tv, language } = useT();
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
   const {
@@ -58,7 +58,7 @@ export default function LoginForm() {
       // account exists (#258). The email is kept. Terminal failures (wrong credentials,
       // validation) clear and refocus the password; transient ones (network, 5xx) keep it so
       // the user can just resubmit (#253).
-      const message = authService.normalizeLoginError(error);
+      const message = tv(authService.normalizeLoginError(error, language));
       toast.error(message, SILENT_TOAST);
       setAnnouncement({ text: message, tone: "assertive" });
       if (isTerminalAuthError(error)) {

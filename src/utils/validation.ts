@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { VALIDATION_MESSAGES, PAYMENT_LIMITS, SECURITY_VALIDATION, TOKEN_DECIMALS } from '@/constants';
 import { SUPPORTED_ASSETS, type BackendResponseValidationIssue } from '@/types';
+import { translateValidation, type Language } from '@/lib/i18n/i18n';
+import { logger, sanitizeLogValue } from './logger';
 
 // Email validation schema. Surrounding whitespace is accepted (and trimmed in the parsed
 // value) so an accidental space doesn't block sign-in; see normalizeEmail (#259).
@@ -432,19 +434,21 @@ export const normalizeContactAddress = (address: string): string =>
   address.trim().toUpperCase();
 
 // Validate contact address after normalization; returns error string or null
-export const validateContactAddress = (raw: string): string | null => {
+export const validateContactAddress = (raw: string, lang?: Language): string | null => {
   const normalized = normalizeContactAddress(raw);
   const result = stellarAddressSchema.safeParse(normalized);
   if (!result.success) {
     const issues = result.error.issues;
-    return issues[0]?.message ?? 'Invalid Stellar address';
+    const msg = issues[0]?.message ?? 'Invalid Stellar address';
+    return lang ? translateValidation(lang, msg) : msg;
   }
   return null;
 };
 
 // Full contact create/update validation utilities
 export const validateContact = (
-  data: { name: string; address: string; tokenType: string }
+  data: { name: string; address: string; tokenType: string },
+  lang?: Language
 ): { isValid: boolean; errors: Record<string, string> } => {
   const normalized = { ...data, address: normalizeContactAddress(data.address) };
   const result = createContactSchema.safeParse(normalized);
@@ -453,13 +457,14 @@ export const validateContact = (
   const errors: Record<string, string> = {};
   for (const issue of issues) {
     const key = issue.path[0] as string;
-    if (!errors[key]) errors[key] = issue.message;
+    if (!errors[key]) errors[key] = lang ? translateValidation(lang, issue.message) : issue.message;
   }
   return { isValid: false, errors };
 };
 
 export const validateUpdateContact = (
-  data: { name?: string; address?: string; tokenType?: string }
+  data: { name?: string; address?: string; tokenType?: string },
+  lang?: Language
 ): { isValid: boolean; errors: Record<string, string> } => {
   const normalized = data.address
     ? { ...data, address: normalizeContactAddress(data.address) }
@@ -470,7 +475,7 @@ export const validateUpdateContact = (
   const errors: Record<string, string> = {};
   for (const issue of issues) {
     const key = issue.path[0] as string;
-    if (!errors[key]) errors[key] = issue.message;
+    if (!errors[key]) errors[key] = lang ? translateValidation(lang, issue.message) : issue.message;
   }
   return { isValid: false, errors };
 };
@@ -524,20 +529,24 @@ export const validateSendPayment = (data: {
   memoType?: string;
   recipientContactId?: string;
   idempotencyKey?: string;
-}): { isValid: boolean; errors: string[] } => {
+}, lang?: Language): { isValid: boolean; errors: string[] } => {
   try {
     sendPaymentSchema.parse(data);
     return { isValid: true, errors: [] };
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
-      const errors = error.issues.map((err: z.ZodIssue) => `${err.path.join('.')}: ${err.message}`);
+      const errors = error.issues.map((err: z.ZodIssue) => {
+        const msg = `${err.path.join('.')}: ${err.message}`;
+        return lang ? `${err.path.join('.')}: ${translateValidation(lang, err.message)}` : msg;
+      });
       return { isValid: false, errors };
     }
-    return { isValid: false, errors: ['Validation failed'] };
+    const defaultMsg = 'Validation failed';
+    return { isValid: false, errors: [lang ? translateValidation(lang, defaultMsg) : defaultMsg] };
   }
 };
 
-export const getPaymentFailureMessage = (error: unknown): string => {
+export const getPaymentFailureMessage = (error: unknown, lang?: Language): string => {
   let message = error instanceof Error ? error.message : String(error || '');
 
   if (typeof error === 'object' && error !== null && 'response' in error) {
@@ -549,19 +558,24 @@ export const getPaymentFailureMessage = (error: unknown): string => {
 
   const normalizedMessage = message.toLowerCase();
 
+  // Retain technical details only in redacted logs (#295)
+  if (error) {
+    logger.error('[payment] error (internal):', sanitizeLogValue(error));
+  }
+
+  let result = 'Failed to send payment';
+
   if (/account.*not.*exist|destination.*not.*activated|destination.*not.*exist|not.*activated|activate.*account|account.*does not exist/i.test(message)) {
-    return 'This Stellar destination is not activated yet. The recipient must activate the account and hold the required minimum balance before this payment can succeed.';
+    result = 'This Stellar destination is not activated yet. The recipient must activate the account and hold the required minimum balance before this payment can succeed.';
+  } else if (/reserve|minimum\s+(native\s+)?balance|insufficient\s+native\s+balance|insufficient.*funds|not enough.*balance/i.test(normalizedMessage)) {
+    result = "This payment would leave too little XLM to meet Stellar's minimum account reserve. Reduce the amount or add XLM.";
+  } else if (/not enough.*balance|amount.*exceeds.*balance/i.test(normalizedMessage)) {
+    result = 'The requested amount exceeds the available balance for this asset.';
+  } else if (message && !/error|exception|status code|failed with|econnrefused|failed to fetch/i.test(message) && message.length < 200) {
+    result = message;
   }
 
-  if (/reserve|minimum\s+(native\s+)?balance|insufficient\s+native\s+balance|insufficient.*funds|not enough.*balance/i.test(normalizedMessage)) {
-    return "This payment would leave too little XLM to meet Stellar's minimum account reserve. Reduce the amount or add XLM.";
-  }
-
-  if (/not enough.*balance|amount.*exceeds.*balance/i.test(normalizedMessage)) {
-    return 'The requested amount exceeds the available balance for this asset.';
-  }
-
-  return message || 'Failed to send payment';
+  return lang ? translateValidation(lang, result) : result;
 };
 
 export const validateMemo = (memo: string, memoType: string): boolean => {
