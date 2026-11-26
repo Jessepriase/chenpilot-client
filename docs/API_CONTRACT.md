@@ -65,7 +65,7 @@ wrapper contract under "Error Handling And User Messages" above.
 
 ## Privacy-Safe Authentication Errors (Account-Enumeration Resistance)
 
-Login and registration errors are normalized on the client before reaching the user.  `AuthService.normalizeLoginError` and `AuthService.normalizeRegisterError` collapse **all** backend failure reasons — including wrong password, user-not-found, email-already-taken, 401, and 409 responses — into a single generic message.  The raw backend message is written only to `console.error` (a redacted log) and is never surfaced in a toast, inline error, or any other UI element.
+Login and registration errors are normalized on the client before reaching the user.  `AuthService.normalizeLoginError` and `AuthService.normalizeRegisterError` collapse **all** backend failure reasons — including wrong password, user-not-found, email-already-taken, 401, and 409 responses — into a single generic message.  Both methods accept an optional `lang` parameter to return the generic message localized to the user's active language (#295).  The raw backend message is written only to `console.error` (a redacted log) and is never surfaced in a toast, inline error, or any other UI element.
 
 This means:
 
