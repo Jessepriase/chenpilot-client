@@ -100,3 +100,19 @@ html.rtl [class*="pr-"] {
     width: 100%;
   }
 }
+
+/* #313 — Browser zoom & text scaling: keep layouts reflowing without
+   horizontal scrolling at 200% zoom / 320px CSS viewport, and keep controls
+   readable. Font sizes use relative units (rem) via Tailwind so they scale
+   with user text-size preferences. */
+body {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* Long wallet addresses, hashes, and keys wrap when text scales up instead
+   of forcing the layout to overflow horizontally. */
+.break-long-value {
+  overflow-wrap: break-word;
+  word-break: break-all;
+}

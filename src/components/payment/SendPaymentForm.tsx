@@ -253,20 +253,6 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
                 selectedContact && 'bg-blue-500/5 border-blue-500/30'
               )}
               disabled={!!selectedContact}
-            <label
-              htmlFor={recipientFieldId}
-              className="block text-sm font-medium text-gray-300 mb-2"
-            >
-              {t("payment.recipientAddress")}
-            </label>
-            <Input
-              {...register('recipientAddress')}
-              placeholder="GABCD1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
-              className={cn(
-                'font-mono text-sm',
-                selectedContact && 'bg-blue-500/5 border-blue-500/30'
-              )}
-              disabled={!!selectedContact}
             />
             {errors.recipientAddress && (
               <p
@@ -316,21 +302,21 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
             <label htmlFor="send-amount" className="block text-sm font-medium text-gray-300 mb-2">
               {t("payment.amount")}
             </label>
-            <div className="flex space-x-2">
-              <Input
-                id="send-amount"
-                {...register('amount')}
-                placeholder="0.00"
-                type="number"
-                step="0.0000001"
-                className="flex-1"
-              />
-              <select
-                id="token-type-select"
-                {...register('tokenType')}
-                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label={t("payment.tokenType")}
-              >
+          <div className="flex space-x-2 min-w-0">
+            <Input
+              id="send-amount"
+              {...register('amount')}
+              placeholder="0.00"
+              type="number"
+              step="0.0000001"
+              className="flex-1 min-w-0"
+            />
+            <select
+              id="token-type-select"
+              {...register('tokenType')}
+              className="min-w-0 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label={t("payment.tokenType")}
+            >
                 {SUPPORTED_ASSETS.map((token) => (
                   <option key={token} value={token}>
                     {token}

@@ -1,8 +1,4 @@
 import '@testing-library/jest-dom';
-import * as matchers from 'vitest-axe/matchers';
-import { expect } from 'vitest';
-
-expect.extend(matchers);
 
 if (typeof window !== 'undefined') {
   if (!window.matchMedia) {
