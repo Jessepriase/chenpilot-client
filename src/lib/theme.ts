@@ -12,6 +12,7 @@ export const THEME_STORAGE_KEY = "theme";
 /** Saved explicit preference, or null when none is saved or storage is denied. */
 export function readSavedTheme(): ThemeMode | null {
   try {
+    if (typeof window === "undefined" || !window.localStorage) return null;
     const value = window.localStorage.getItem(THEME_STORAGE_KEY);
     return value === "light" || value === "dark" ? value : null;
   } catch {
@@ -22,6 +23,7 @@ export function readSavedTheme(): ThemeMode | null {
 /** Persist an explicit choice; ignored when storage is denied. */
 export function saveTheme(mode: ThemeMode): void {
   try {
+    if (typeof window === "undefined" || !window.localStorage) return;
     window.localStorage.setItem(THEME_STORAGE_KEY, mode);
   } catch {
     // Storage denied (private mode, blocked cookies): keep the in-memory choice only

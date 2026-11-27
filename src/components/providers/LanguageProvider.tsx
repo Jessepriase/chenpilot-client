@@ -26,8 +26,10 @@ export function useLanguageDirection(): LanguageDirectionContextValue {
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const dispatch = useAppDispatch();
-  const language = useAppSelector((state) => state.ui.language);
-  const userId = useAppSelector((state) => state.auth.user?.id ?? null);
+  const language = useAppSelector((state) => state?.ui?.language ?? 'en');
+  const userId = useAppSelector(
+    (state) => (state as { auth?: { user?: { id?: string | null } } })?.auth?.user?.id ?? null,
+  );
 
   // Signing in restores that user's saved language; signing out returns to the device
   // preference, so one user's choice never carries over to another user (#291)
@@ -38,6 +40,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const direction = getLanguageDirection(language);
 
   useEffect(() => {
+    if (typeof document === 'undefined' || !document.documentElement) return;
     const htmlElement = document.documentElement;
     htmlElement.lang = language;
     htmlElement.dir = direction;

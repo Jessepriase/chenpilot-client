@@ -8,6 +8,7 @@ import {
   resolvePendingTransaction,
   trackPendingTransaction,
 } from '@/store/slices/accountSlice';
+import { addNotification } from '@/store/slices/uiSlice';
 import {
   TRANSACTION_CONFIRMATION_POLL_INTERVAL_MS,
   TRANSACTION_CONFIRMATION_TIMEOUT_MS,
@@ -63,6 +64,21 @@ export function TransactionToastListener() {
       dispatch(trackPendingTransaction({ hash, label, at: new Date().toISOString() }));
       toast.loading(transactionStatusMessage('pending', label), { id });
 
+      dispatch(
+        addNotification({
+          id: `tx-${hash}`,
+          type: 'info',
+          category: 'transaction',
+          title: 'Transaction Submitted',
+          message: transactionStatusMessage('pending', label),
+          link: '/transactions',
+          metadata: {
+            status: 'pending',
+            transactionHash: hash,
+          },
+        }),
+      );
+
       const finish = (status: 'confirmed' | 'failed') => {
         if (entry.stopped || entry.terminal) return;
         entry.terminal = true;
@@ -85,6 +101,21 @@ export function TransactionToastListener() {
         } else {
           toast.error(message, { id, duration: 6000 });
         }
+
+        dispatch(
+          addNotification({
+            id: `tx-${hash}`,
+            type: status === 'confirmed' ? 'success' : 'error',
+            category: 'transaction',
+            title: status === 'confirmed' ? 'Transaction Confirmed' : 'Transaction Failed',
+            message,
+            link: '/transactions',
+            metadata: {
+              status,
+              transactionHash: hash,
+            },
+          }),
+        );
       };
 
       const poll = async () => {

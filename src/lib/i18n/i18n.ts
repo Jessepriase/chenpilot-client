@@ -53,15 +53,41 @@ export function humanizeKey(path: string): string {
 }
 
 /**
- * Translate a validation message produced by the zod schemas (#292). Schemas keep their
- * English messages; this maps a known English message to the `validation` key in `lang`.
- * Unknown messages are returned unchanged.
+ * Translate a validation message produced by schemas or service error handlers (#292, #295).
+ * Schemas keep their English messages; this maps a known English message to the `validation`
+ * or `notifications` key in `lang`. Unknown messages are returned unchanged.
  */
 export function translateValidation(lang: Language, message: string | undefined): string {
   if (!message) return '';
   const english = translations.en.validation as Record<string, string>;
   const key = Object.keys(english).find((k) => english[k] === message);
-  return key ? t(lang, `validation.${key}`) : message;
+  if (key) return t(lang, `validation.${key}`);
+
+  const notifs = (translations.en as unknown as { notifications?: Record<string, string> }).notifications;
+  if (notifs) {
+    const notifKey = Object.keys(notifs).find((k) => notifs[k] === message);
+    if (notifKey) return t(lang, `notifications.${notifKey}`);
+  }
+
+  return message;
+}
+
+/**
+ * Translate a user-facing notification or service message (#295).
+ */
+export function translateNotification(lang: Language, message: string | undefined): string {
+  if (!message) return '';
+  const notifs = (translations.en as unknown as { notifications?: Record<string, string> }).notifications;
+  if (notifs) {
+    const notifKey = Object.keys(notifs).find((k) => notifs[k] === message);
+    if (notifKey) return t(lang, `notifications.${notifKey}`);
+  }
+
+  const english = translations.en.validation as Record<string, string>;
+  const key = Object.keys(english).find((k) => english[k] === message);
+  if (key) return t(lang, `validation.${key}`);
+
+  return message;
 }
 
 /** Stored language for the current user / device (#291). */

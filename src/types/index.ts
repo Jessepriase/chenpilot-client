@@ -299,6 +299,7 @@ export interface StellarTransaction {
   fee_charged: string;
   operation_count: number;
   successful: boolean;
+  status?: 'success' | 'pending' | 'failed';
   operations: StellarOperation[];
   /**
    * Memo value attached to the transaction, as returned by Horizon.

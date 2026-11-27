@@ -1,5 +1,6 @@
 
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import {
   AccountStatus,
   WalletBalance,
@@ -11,6 +12,29 @@ import {
 } from "@/types";
 import { horizonFetch } from "@/utils/horizonFetch";
 import apiService from "@/services/api";
+
+
+export interface TransactionFilters {
+  type: string;        // e.g., 'payment', 'swap', 'deposit'
+  asset: string;       // e.g., 'XLM', 'USDC'
+  direction: string;   // 'sent' | 'received' | 'all'
+  status: string;      // 'success' | 'pending' | 'failed' | 'all'
+  startDate: string;   // ISO string or YYYY-MM-DD
+  endDate: string;     // ISO string or YYYY-MM-DD
+}
+
+type NetworkHealthStatus = "healthy" | "degraded" | "down" | "unknown";
+type AccountSyncState = "synced" | "syncing" | "desynced";
+
+const initialFilters: TransactionFilters = {
+  type: 'all',
+  asset: 'all',
+  direction: 'all',
+  status: 'all',
+  startDate: '',
+  endDate: '',
+};
+
 import {
   mergeNewestTransactionHistory,
   mergeTransactionHistory,
@@ -565,6 +589,17 @@ const accountSlice = createSlice({
         updatedAt: at,
       });
     },
+    setTransactionFilter: (
+      state,
+      action: PayloadAction<Partial<TransactionFilters>>,
+    ) => {
+      // Note: Filters are managed in component state, this is for consistency
+      // Can be used for persisting filters to Redux if needed in future
+    },
+    clearTransactionFilters: (state) => {
+      // Note: Filters are managed in component state, this is for consistency
+      // Can be used for persisting filters to Redux if needed in future
+    },
   },
 
   extraReducers: (builder) => {
@@ -896,6 +931,10 @@ const accountSlice = createSlice({
       });
   },
 });
+
+
+export const { clearError, updateAccountStatus, updateBalance, clearAccount, setTransactionFilter, clearTransactionFilters } =
+  accountSlice.actions;
 
 export const {
   clearError,

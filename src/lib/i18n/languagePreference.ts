@@ -20,6 +20,7 @@ export function parseLanguage(value: unknown): PreferredLanguage | null {
 
 function readUserMap(): Record<string, string> {
   try {
+    if (typeof window === "undefined" || !window.localStorage) return {};
     const parsed = JSON.parse(window.localStorage.getItem("language_by_user") || "{}");
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
@@ -30,6 +31,7 @@ function readUserMap(): Record<string, string> {
 /** Id of the signed-in user from the persisted profile, or null when signed out. */
 export function readActiveUserId(): string | null {
   try {
+    if (typeof window === "undefined" || !window.localStorage) return null;
     if (!window.localStorage.getItem("auth_token")) return null;
     const user = JSON.parse(window.localStorage.getItem("user_data") || "null");
     return typeof user?.id === "string" && user.id ? user.id : null;
@@ -41,9 +43,10 @@ export function readActiveUserId(): string | null {
 /** The language to show: the user's saved choice, else the device preference, else English. */
 export function readLanguagePreference(userId: string | null = null): PreferredLanguage {
   if (typeof window === "undefined") return DEFAULT_LANGUAGE;
-  const fromUser = userId ? parseLanguage(readUserMap()[userId]) : null;
-  if (fromUser) return fromUser;
   try {
+    const fromUser = userId ? parseLanguage(readUserMap()[userId]) : null;
+    if (fromUser) return fromUser;
+    if (!window.localStorage) return DEFAULT_LANGUAGE;
     return parseLanguage(window.localStorage.getItem("language")) ?? DEFAULT_LANGUAGE;
   } catch {
     return DEFAULT_LANGUAGE;
@@ -53,6 +56,7 @@ export function readLanguagePreference(userId: string | null = null): PreferredL
 /** Save a choice for the signed-in user, or as the device preference when signed out. */
 export function saveLanguagePreference(lang: PreferredLanguage, userId: string | null = null): void {
   try {
+    if (typeof window === "undefined" || !window.localStorage) return;
     if (userId) {
       const map = readUserMap();
       map[userId] = lang;

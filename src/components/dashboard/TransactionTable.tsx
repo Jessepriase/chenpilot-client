@@ -537,6 +537,42 @@ export default function TransactionTable({
     }
   };
 
+  const getStatusDisplay = (tx: StellarTransaction) => {
+    // Use explicit status field if available, otherwise derive from successful flag
+    const status = tx.status || (tx.successful ? 'success' : 'failed');
+    
+    switch (status) {
+      case 'success':
+        return (
+          <div className="flex items-center space-x-1">
+            <Check className="h-4 w-4 text-green-400" />
+            <span className="text-green-400 font-medium">Success</span>
+          </div>
+        );
+      case 'pending':
+        return (
+          <div className="flex items-center space-x-1">
+            <Loader2 className="h-4 w-4 text-yellow-400 animate-spin" />
+            <span className="text-yellow-400 font-medium">Pending</span>
+          </div>
+        );
+      case 'failed':
+        return (
+          <div className="flex items-center space-x-1">
+            <AlertCircle className="h-4 w-4 text-red-400" />
+            <span className="text-red-400 font-medium">Failed</span>
+          </div>
+        );
+      default:
+        return (
+          <div className="flex items-center space-x-1">
+            <AlertCircle className="h-4 w-4 text-gray-400" />
+            <span className="text-gray-400 font-medium">Unknown</span>
+          </div>
+        );
+    }
+  };
+
   if (error) {
     return (
       <Card className="p-6 bg-red-950/20 border-red-900/50">
@@ -737,6 +773,64 @@ export default function TransactionTable({
                                   ? 'text-purple-300 font-medium'
                                   : 'text-gray-300'
                           }`}
+
+                        />
+                      </div>
+                      <div>
+                        <p className="font-medium text-white">
+                          {getOperationType(tx.operations)}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {tx.operation_count}
+                          {tx.operation_count === 1 ? ' op' : ' ops'}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4">
+                    <button
+                      onClick={() => handleCopyHash(tx.hash)}
+                      className="font-mono text-xs text-blue-400 hover:text-blue-300 truncate max-w-xs"
+                      title={tx.hash}
+                    >
+                      {formatAddress(tx.hash)}
+                    </button>
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className="text-gray-300">
+                      {getOperationDetails(tx.operations) || '-'}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className="text-gray-300">#{tx.ledger}</span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className="text-gray-300">
+                      {new Date(tx.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    {getStatusDisplay(tx)}
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <a
+                      href={`https://stellar.expert/explorer/public/tx/${tx.hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1 px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 transition-colors text-xs text-blue-400 hover:text-blue-300"
+                    >
+                      <span>View</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </td>
+                </tr>
+              ))}
+
                         >
                           {formattedAmount}
                         </span>
@@ -824,6 +918,7 @@ export default function TransactionTable({
                   </tr>
                 );
               })}
+
             </tbody>
           </table>
         </div>

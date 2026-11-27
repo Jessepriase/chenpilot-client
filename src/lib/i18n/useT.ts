@@ -1,8 +1,8 @@
 import { useAppSelector } from '@/store';
-import { t, translateValidation, type Language } from './i18n';
+import { t, translateValidation, translateNotification, type Language } from './i18n';
 
 /**
- * Translator bound to the current UI language (#292). Reads the language defensively so
+ * Translator bound to the current UI language (#292, #295). Reads the language defensively so
  * components still render (in English) where the store has no `ui` slice.
  */
 export function useT() {
@@ -13,5 +13,6 @@ export function useT() {
     language,
     t: (path: string) => t(language, path),
     tv: (message: string | undefined) => translateValidation(language, message),
+    tn: (message: string | undefined) => translateNotification(language, message),
   };
 }

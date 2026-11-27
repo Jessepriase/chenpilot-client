@@ -83,6 +83,18 @@ describe('AuthService.normalizeLoginError', () => {
       expect(result).not.toMatch(/not found|already|duplicate|taken|incorrect|invalid credential/i);
     }
   });
+
+  it('supports localization via lang parameter (#295)', () => {
+    expect(authService.normalizeLoginError(new Error('User not found'), 'es')).toBe(
+      'Correo o contraseña no válidos. Comprueba tus credenciales e inténtalo de nuevo.'
+    );
+    expect(authService.normalizeLoginError(new Error('User not found'), 'fr')).toBe(
+      'E-mail ou mot de passe invalide. Veuillez vérifier vos identifiants et réessayer.'
+    );
+    expect(authService.normalizeLoginError(new Error('User not found'), 'ar')).toBe(
+      'البريد الإلكتروني أو كلمة المرور غير صالحة. يرجى التحقق من بيانات الاعتماد والمحاولة مرة أخرى.'
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -135,6 +147,18 @@ describe('AuthService.normalizeRegisterError', () => {
       const result = authService.normalizeRegisterError(new Error(msg));
       expect(result).not.toMatch(/already|duplicate|taken|exists/i);
     }
+  });
+
+  it('supports localization via lang parameter (#295)', () => {
+    expect(authService.normalizeRegisterError(new Error('Email already taken'), 'es')).toBe(
+      'No se pudo crear la cuenta. Comprueba tus datos e inténtalo de nuevo.'
+    );
+    expect(authService.normalizeRegisterError(new Error('Email already taken'), 'fr')).toBe(
+      'Impossible de créer le compte. Veuillez vérifier vos informations et réessayer.'
+    );
+    expect(authService.normalizeRegisterError(new Error('Email already taken'), 'ar')).toBe(
+      'تعذر إنشاء الحساب. يرجى التحقق من تفاصيلك والمحاولة مرة أخرى.'
+    );
   });
 });
 

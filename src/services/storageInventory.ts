@@ -117,6 +117,15 @@ export const STORAGE_INVENTORY: readonly StorageKeyInfo[] = [
     contents: 'Must never hold MFA recovery codes; also cleared from sessionStorage',
   },
   {
+    key: 'notification_history',
+    area: 'localStorage',
+    owner: 'src/store/slices/uiSlice.ts',
+    lifetime: 'Until logout or user clear',
+    userScoped: true,
+    sensitivity: 'personal',
+    contents: 'Non-sensitive notification history metadata (transaction outcomes, agent status events)',
+  },
+  {
     key: 'theme',
     area: 'localStorage',
     owner: 'src/store/slices/uiSlice.ts, src/components/providers/ThemeProvider.tsx',

@@ -59,6 +59,19 @@ Every subscription pattern has explicit cleanup responsibilities to prevent dupl
 | `once(event, handler)` | **Auto on first fire / Caller on early unmount** | Return `() => { off(event, handler); }` from `useEffect` | Prevents the callback from firing after unmount if the event never arrived before teardown. |
 | `manager.onStateChange(listener)` / `manager.onResyncStateChange(listener)` | **Caller** | Invoke the returned `unsubscribe()` function on cleanup | `SocketProvider` and `useSocketResync` handle this automatically for their own subscriptions. |
 
+### Provider boundary (#541)
+
+`SocketProvider` also removes every handler registered through its context
+(`on` and `once`) before calling `manager.disconnect()` on unmount. This is a
+backstop for callers that forget their own `off()` cleanup: a socket event
+arriving after navigation cannot invoke a handler from an unmounted screen.
+Repeated mount/unmount cycles therefore cannot accumulate callbacks.
+
+The provider rebinds only when `configKey` or `autoConnect` changes; a new
+`config` object with the same key does not tear down live listeners. Tests:
+`src/components/providers/SocketProvider.test.tsx` and
+`src/services/__tests__/socketManager.test.ts`.
+
 ---
 
 ## Reconnection & Queueing Semantics
@@ -79,6 +92,24 @@ Every subscription pattern has explicit cleanup responsibilities to prevent dupl
   - `reconnect_failed` and non-reconnecting `connect_error` transition to `exhausted`.
   - `retry()` resets `reconnectAttempt` to `0`, transitions to `connecting`, and reconnects the existing socket (or calls `connect()` if none exists).
   - `disconnect()` closes the socket, clears the socket reference, and transitions to `disconnected`.
+
+### Connection Diagnostics (#540)
+
+`SocketProvider` exposes `reconnectAttempt` and `maxReconnectAttempts` alongside
+`connectionState`. `SocketStatusIndicator` renders them through the pure helpers in
+`src/components/status/socketDiagnostics.ts`:
+
+- The displayed attempt is clamped to `1…maxReconnectAttempts` and never above
+  `RECONNECT_POLICY.maxAttemptsCap` (20), so an unexpected count cannot imply
+  unlimited retries.
+- The count is shown only for `reconnecting` and `exhausted`. A `connect` event
+  resets the manager's attempt to `0` and the state to `connected`, which removes
+  the diagnostic immediately; manual `retry()` does the same.
+- The helpers accept only the state and two numbers. Tokens, auth payloads, socket
+  ids and error text never enter diagnostics.
+
+Tests: `src/components/status/socketDiagnostics.test.ts` and
+`src/components/status/SocketStatusIndicator.test.tsx`.
 
 ### Outbound Emit & Queueing Semantics
 

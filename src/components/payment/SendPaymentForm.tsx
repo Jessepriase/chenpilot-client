@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { sendPaymentSchema, validateSendPayment, sanitizePaymentInput } from '@/utils/validation';
+import { sendPaymentSchema, validateSendPayment, sanitizePaymentInput, getPaymentFailureMessage } from '@/utils/validation';
 import { SendPaymentRequest, ContactSelection } from '@/types';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -13,11 +13,8 @@ import {
   Send,
   User,
   X,
-  ChevronDown,
   Loader2,
   AlertTriangle,
-  CheckCircle,
-  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
@@ -26,7 +23,7 @@ import { LiveAnnouncer, SILENT_TOAST, type Announcement } from '@/components/ui/
 
 interface SendPaymentFormProps {
   onSubmit: (data: SendPaymentRequest) => Promise<void>;
-  contacts: any[];
+  contacts: ContactSelection[];
   isLoading?: boolean;
   defaultTokenType?: 'XLM' | 'USDC' | 'USDT' | 'BTC' | 'ETH' | 'AQUA';
 }
@@ -34,15 +31,14 @@ interface SendPaymentFormProps {
 export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
   onSubmit,
   contacts,
-  isOnline,
   isLoading = false,
   defaultTokenType = 'XLM',
 }) => {
   const [selectedContact, setSelectedContact] = useState<ContactSelection | null>(null);
   const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Translated workflow strings (#292)
-  const { t, tv } = useT();
+  // Translated workflow strings (#292, #295)
+  const { t, tv, language } = useT();
   // Screen-reader status for submission (#307)
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
@@ -128,7 +124,7 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
     // acknowledging.  This is a UX safeguard only — the backend is the
     // authoritative check.
     if (isSelfTransfer && !selfTransferAcknowledged) {
-      toast.error('Please read and acknowledge the self-transfer warning before sending.');
+      toast.error(tv('Please read and acknowledge the self-transfer warning before sending.'));
       return;
     }
 
@@ -145,10 +141,10 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
       }
       
       // Validate again (defensive programming)
-      const validation = validateSendPayment(sanitizedData);
+      const validation = validateSendPayment(sanitizedData, language);
       if (!validation.isValid) {
-        validation.errors.forEach((error) => toast.error(error, SILENT_TOAST));
-        setAnnouncement({ text: `Payment not sent: ${validation.errors[0] ?? 'invalid details'}`, tone: 'assertive' });
+        validation.errors.forEach((error) => toast.error(tv(error), SILENT_TOAST));
+        setAnnouncement({ text: `Payment not sent: ${tv(validation.errors[0]) ?? 'invalid details'}`, tone: 'assertive' });
         return;
       }
       
@@ -162,24 +158,13 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
       setSelfTransferAcknowledged(false);
     } catch (error: unknown) {
       console.error('Payment submission error:', error);
-      const message = (error as { message?: string })?.message || 'Failed to send payment';
+      const rawMessage = getPaymentFailureMessage(error, language);
+      const message = tv(rawMessage);
       toast.error(message, SILENT_TOAST);
       setAnnouncement({ text: `Payment failed: ${message}`, tone: 'assertive' });
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const getContactDisplayName = () => {
-    if (selectedContact) {
-      return (
-        <div className="flex items-center space-x-2">
-          <User className="h-4 w-4 text-blue-400" />
-          <span className="text-blue-400">{selectedContact.name}</span>
-        </div>
-      );
-    }
-    return 'Select from contacts';
   };
 
   return (
@@ -241,11 +226,14 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6" noValidate>
           {/* Recipient Address */}
           <div>
-            <label htmlFor="recipient-address" className="block text-sm font-medium text-gray-300 mb-2">
+            <label
+              htmlFor={recipientFieldId}
+              className="block text-sm font-medium text-gray-300 mb-2"
+            >
               {t("payment.recipientAddress")}
             </label>
             <Input
-              id="recipient-address"
+              id={recipientFieldId}
               {...register('recipientAddress')}
               placeholder="GABCD1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
               className={cn(
@@ -302,21 +290,21 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
             <label htmlFor="send-amount" className="block text-sm font-medium text-gray-300 mb-2">
               {t("payment.amount")}
             </label>
-          <div className="flex space-x-2 min-w-0">
-            <Input
-              id="send-amount"
-              {...register('amount')}
-              placeholder="0.00"
-              type="number"
-              step="0.0000001"
-              className="flex-1 min-w-0"
-            />
-            <select
-              id="token-type-select"
-              {...register('tokenType')}
-              className="min-w-0 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              aria-label={t("payment.tokenType")}
-            >
+            <div className="form-row-wrap">
+              <Input
+                id="send-amount"
+                {...register('amount')}
+                placeholder="0.00"
+                type="number"
+                step="0.0000001"
+                className="flex-1"
+              />
+              <select
+                id="token-type-select"
+                {...register('tokenType')}
+                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label={t("payment.tokenType")}
+              >
                 {SUPPORTED_ASSETS.map((token) => (
                   <option key={token} value={token}>
                     {token}

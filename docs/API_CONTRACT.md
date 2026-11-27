@@ -32,14 +32,41 @@ Environment variables beginning with `NEXT_PUBLIC_` are browser-visible configur
 - A 401 on an `ApiService` request triggers one queued refresh attempt and then retries the original request once. If refresh fails, local auth is cleared and the browser is sent to `/auth/login`. The auth UI may show the rejected thunk/error message.
 - Requests may include `X-Correlation-ID`. This is a safe diagnostic identifier, not authentication or a payload field. The backend MAY echo `X-Correlation-ID` or `X-Request-ID` in the response. The client keeps the value in structured diagnostic details and logs only status, method/code, and correlation metadata; prompts, tokens, private keys, wallet secrets, and response payloads are excluded. Backend log correlation support is not currently guaranteed by this contract.
 - The retry interceptor retries eligible network failures and the configured 408, 429, and 5xx statuses, subject to method safety; 503 is retried for any method. It exposes retry state to the UI. This is transport retry behavior, not an application error envelope.
+- **Notification History**: Transient toasts and asynchronous transaction/agent event notices are archived in client-side state (`uiSlice.notifications`) with explicit read and clear controls (#318). Only non-sensitive metadata (outcome status, timestamp, transaction hash, category, message, and target route link such as `/transactions` or `/chat`) is persisted. The history is bounded to 20 items and is strictly user-scoped; all stored notifications are cleared on logout (`clearUserScopedStorage`).
 - Contact wrappers specially handle 404: `GET /contacts` becomes `{ success: true, data: [], message: ... }`; contact create/update/delete become `{ success: false, status: 404, message: ... }`. Other failures reject. The contacts page and send flow now use these wrappers; contact requests are blocked while the browser is offline and are not queued.
 - Agent query wrappers catch failures and return `result.success: false`. Messages containing `invalid query`, `timeout`, or `network` map to friendly text; other failures use a generic unavailable/query-failed message. Chat displays the returned error/message to the user.
 - The Google sign-in surface displays the caught error text. The liquidity widget displays generic inline errors (`Failed to fetch liquidity data` or `Error loading liquidity statistics`) rather than the backend message.
 - Login/register forms dispatch auth thunks; the backend response contract is documented in the Authentication Endpoints table below.
 
+### Error Codes Consumed by Wallet Screens (#544)
+
+Wallet, send and agent screens consume the codes below. "Automatic retry" means
+`src/utils/retryUtils.ts` may replay the request; agent `errorKind` retry is a
+separate user-driven decision (`isRetryableErrorKind`). No code in this table
+causes a state-changing payment to be replayed automatically: requests marked
+`paymentOperation` are never retried, even on `503`.
+
+| Code | Source and shape | Automatic retry | User-facing treatment | Verified by |
+| --- | --- | --- | --- | --- |
+| `REAUTH_REQUIRED` | `401`/`403` body code on sensitive account/settings actions, e.g. `{ "code": "REAUTH_REQUIRED", "maxAgeSeconds": 300 }` | No; the 401 refresh interceptor explicitly rethrows it | Password step-up prompt; local auth is not cleared and no logout redirect occurs | `walletErrorCodes.test.ts`, `reauth.test.ts` |
+| `protocol_error` | `200` from `POST /query` whose body fails `parseAgentEnvelope` | No; the request already succeeded at transport level | `result.success: false` with a generic "could not understand" message; never rendered as a successful answer | `walletErrorCodes.test.ts`, `agentEnvelope.test.ts` |
+| `timeout` | `ECONNABORTED`/`ETIMEDOUT`, a "timeout" message, or HTTP `408`/`504` | Yes for read-only requests; state-changing queries show **Check status** instead of a retry | "Taking longer than expected"; the user is warned the action may still be running | `walletErrorCodes.test.ts`, `agentServiceTimeout.test.ts` |
+| `network` | `ERR_NETWORK`, no HTTP response, or a "network" message | Yes on idempotent methods only | "Check your internet connection and try again" | `walletErrorCodes.test.ts` |
+| `server` | `429` or any `5xx` (including `503`) | Classification: yes. Transport replay: idempotent methods only, except `503` on any non-payment method | Generic unavailable copy; `503` health bodies may be reported as degraded rather than as a blank outage | `walletErrorCodes.test.ts`, `retryUtils.test.ts`, `agentServiceHealth.test.ts` |
+| `unknown` | Anything the classifier cannot categorize | Yes | Generic unavailable copy; no backend detail is shown | `walletErrorCodes.test.ts` |
+| `invalid_query` | Other `4xx`, or a message containing "invalid query" | No; the same prompt would fail again | "I didn't understand that…" rephrase prompt; no retry button | `walletErrorCodes.test.ts`, `agentServiceRetry.test.ts` |
+| `unauthenticated` | `401`/`403` from the agent, or "not authenticated" | No | "Please sign in again to continue"; no automatic logout for the agent path | `walletErrorCodes.test.ts` |
+| `not_found` | `200 { "status": "not_found" }` from `GET /query/{clientRequestId}/status` | State-changing queries are resent only after `not_found`, with the same `clientRequestId` | Treated as "the backend never saw this action" | `walletErrorCodes.test.ts`, `agentServiceRetry.test.ts` |
+| `completed` / `pending` | `200` status values from the same endpoint | No resend | The late result replaces the failed reply, or the user is asked to check again shortly | `walletErrorCodes.test.ts` |
+| `unknown` status | Missing/unreachable status endpoint | No resend without explicit user confirmation | Asks the user to check transaction history before "Retry anyway" | `walletErrorCodes.test.ts`, `agentServiceRetry.test.ts` |
+
+Transport codes `408`, `429` and `5xx` come from `RETRY_CONFIG.RETRYABLE_STATUS_CODES`;
+`401` is owned by the token-refresh interceptor, and contact `404` has its own
+wrapper contract under "Error Handling And User Messages" above.
+
 ## Privacy-Safe Authentication Errors (Account-Enumeration Resistance)
 
-Login and registration errors are normalized on the client before reaching the user.  `AuthService.normalizeLoginError` and `AuthService.normalizeRegisterError` collapse **all** backend failure reasons — including wrong password, user-not-found, email-already-taken, 401, and 409 responses — into a single generic message.  The raw backend message is written only to `console.error` (a redacted log) and is never surfaced in a toast, inline error, or any other UI element.
+Login and registration errors are normalized on the client before reaching the user.  `AuthService.normalizeLoginError` and `AuthService.normalizeRegisterError` collapse **all** backend failure reasons — including wrong password, user-not-found, email-already-taken, 401, and 409 responses — into a single generic message.  Both methods accept an optional `lang` parameter to return the generic message localized to the user's active language (#295).  The raw backend message is written only to `console.error` (a redacted log) and is never surfaced in a toast, inline error, or any other UI element.
 
 This means:
 
@@ -418,13 +445,15 @@ Protected settings actions include password changes, MFA changes, and device man
 
 The service includes methods for Stellar/Starknet account and funding paths. `getAccountTransactions` is used by the account transaction flow.
 
+The `StellarTransaction` data model includes a `status` field that can be `'success'`, `'pending'`, or `'failed'`, distinct from the boolean `successful` flag which indicates whether the transaction settled on chain. The status filter on the transaction history page allows users to narrow results by outcome.
+
 | Endpoint | Request example | Success response example | UI surface / behavior |
 | --- | --- | --- | --- |
 | `POST /auth/starknet/deploy` | `{}` | `{"success":true,"data":{"transactionHash":"0xabc","contractAddress":"0xdef"}}` | Service method; Starknet deploy route. |
 | `GET /auth/starknet/balance` | No body; bearer token when available. | `{"success":true,"data":{"hasBalance":true,"balance":"12.5","required":"1","nativeBalance":"12.5"}}` | Service method; Starknet balance route. |
 | `GET /auth/starknet/status` | No body; bearer token when available. | `{"success":true,"data":{"isDeployed":true,"isFunded":true,"address":"G...","publicKey":"G..."}}` | Service method; Starknet status route. |
 | `POST /auth/funding/fund-account` | `{}` | `{"success":true,"data":{"transactionHash":"0xabc","amount":"10"}}` | Service method; funding route. |
-| `GET /auth/funding/auto-funding-stats` | No body. | `{"success":true,"data":{"totalFunded":10,"totalAccounts":8,"averageAmount":"5.25"}}` | Service method; funding statistics route. |
+| `GET /auth/funding/auto-funding-stats` | No body. | `{"success":true,"data":{"totalFunded":10,"totalAccounts":8,"averageAmount":"5.25"}}` | Service method; funding statistics route. Responses are validated against `autoFundingStatsResponseSchema`; empty or malformed envelopes reject with `BackendResponseValidationError` rather than being treated as zeroed statistics. |
 | `GET /auth/funding/funded-account-balance` | No body. | `{"success":true,"data":{"balance":"10","hasBalance":true}}` | Service method only; no direct screen caller found. |
 | `POST /auth/funding/batch-fund` | `{"amounts":["1","2.5"]}` | `{"success":true,"data":{"transactionHashes":["0xabc","0xdef"],"totalAmount":"3.5"}}` | Service method only; no direct screen caller found. |
 | `GET /account/{userId}/transactions?page={page}&limit={limit}` | `GET /account/u1/transactions?page=1&limit=10` | `{"success":true,"data":{"transactions":[],"total":0,"page":1,"limit":10}}` | Account transaction thunk/dashboard; errors are stored in account state. |
@@ -651,3 +680,9 @@ For every `localStorage` key the client reads and parses:
 ### Backend integration note
 
 These recovery paths are entirely client-side and require no backend changes. The backend is not notified when a key is cleared. On the next successful login or registration the keys are rewritten with fresh values.
+
+### Offline replay idempotency
+
+Messages persisted in `messageQueue` are replayed after a reconnect. `POST /query` accepts a `clientRequestId` field, and replay uses a stable key derived from the queued row's id (`replay_<queue entry id>`) via `src/utils/offlineReplayIdempotency.ts`. Retrying the same queued row therefore sends the same id, allowing the backend to deduplicate instead of producing a second agent answer. `src/services/__tests__/agentIdempotencyContract.test.ts` verifies the field is present in the request body and stable across repeated deliveries.
+
+**Backend contract limitation.** The client can only *offer* a stable idempotency key. Duplicate-free replay is guaranteed only if the backend actually deduplicates `clientRequestId` for `POST /query`. Until that behaviour is confirmed, the client does not claim a duplicate-free replay: it surfaces `OFFLINE_REPLAY_DEDUP_NOTICE`, which explains that replies may appear twice when the backend does not honour the key. No silent duplication is presented as success.

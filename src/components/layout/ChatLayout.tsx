@@ -8,7 +8,7 @@ import {
   startNewChat,
   loadChatHistory,
   loadConversationsLocally,
-  deleteConversation,
+deleteConversation,
   setCurrentConversation,
 } from "@/store/slices/chatSlice";
 import { ConversationManager } from "@/components/chat/ConversationManager";
@@ -17,9 +17,10 @@ import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDi
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Button } from "@/components/ui/Button";
 import toast from "react-hot-toast";
-import { X, Menu, PanelLeft, Plus } from "lucide-react";
+import { X, Menu, PanelLeft, Plus, Bell } from "lucide-react";
 import { cn } from "@/utils/cn";
 import Image from "next/image";
+import { toggleNotificationHistory } from "@/store/slices/uiSlice";
 
 interface ChatLayoutProps {
   children: React.ReactNode;
@@ -66,6 +67,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const { chatHistory, currentConversation, conversations, messages } = useAppSelector(
     (state) => state.chat,
   );
+  const notifications = useAppSelector((state) => state.ui.notifications) || [];
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   // Convert chat history object to array for display
   const chatHistoryList = React.useMemo(() => {
@@ -89,20 +92,16 @@ export function ChatLayout({ children }: ChatLayoutProps) {
       .slice(0, 10); // Show last 10 conversations
   }, [chatHistory, conversations]);
 
-  const profileMenuItems = [
-    {
-      name: "Dashboard",
-      href: "/dashboard",
-    },
-    {
-      name: "Contacts",
-      href: "/contacts",
-    },
-    {
-      name: "Settings",
-      href: "/settings",
-    },
+  const navItems = [
+    { name: "Chat", href: "/chat" },
+    { name: "Dashboard", href: "/dashboard" },
+    { name: "Contacts", href: "/contacts" },
+    { name: "Settings", href: "/settings" },
   ];
+
+  const isNavItemActive = (href: string) => pathname.startsWith(href);
+
+  const profileMenuItems = navItems.filter((item) => item.href !== "/chat");
 
   const handleNewChat = () => {
     dispatch(startNewChat());
@@ -119,21 +118,20 @@ export function ChatLayout({ children }: ChatLayoutProps) {
     setSidebarOpen(false);
   };
 
-  const handleDeleteChat = (conversationId: string, event?: React.MouseEvent) => {
-    event?.stopPropagation();
-    const conversation = conversations.find((item) => item.id === conversationId);
-    setPendingDelete({ id: conversationId, title: conversation?.title ?? "This conversation" });
-  };
+const handleDeleteChat = (conversationId: string, event?: React.MouseEvent) => {
+  event?.stopPropagation();
+  const conversation = conversations.find((item) => item.id === conversationId);
+  setPendingDelete({ id: conversationId, title: conversation?.title ?? "This conversation" });
+};
 
-  // Confirmed: cancel in-flight requests, drop late responses, then remove (#269)
-  const confirmDeleteChat = async (conversationId: string) => {
-    const wasOpen = currentConversation?.id === conversationId;
-    setPendingDelete(null);
-    await dispatch(deleteConversation(conversationId));
-    toast.success("Chat deleted");
-    if (wasOpen) router.push("/chat");
-  };
-
+// Confirmed: cancel in-flight requests, drop late responses, then remove (#269)
+const confirmDeleteChat = async (conversationId: string) => {
+  const wasOpen = currentConversation?.id === conversationId;
+  setPendingDelete(null);
+  await dispatch(deleteConversation(conversationId));
+  toast.success("Chat deleted");
+  if (wasOpen) router.push("/chat");
+};
   const handleNavigation = (href: string) => {
     router.push(href);
     setSidebarOpen(false);
@@ -194,7 +192,22 @@ export function ChatLayout({ children }: ChatLayoutProps) {
             ChenPilot
           </h1>
         </div>
-        <div className="w-10" />
+        <button
+          data-testid="mobile-notifications-button"
+          onClick={() => dispatch(toggleNotificationHistory())}
+          aria-label="View notification history"
+          className="relative p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+        >
+          <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span
+              data-testid="unread-notifications-badge"
+              className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-purple-600 text-[10px] font-bold text-white"
+            >
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -263,7 +276,24 @@ export function ChatLayout({ children }: ChatLayoutProps) {
             </div>
 
             {!sidebarCollapsed && (
-              <div className="absolute top-4 right-4">
+              <div className="absolute top-4 right-4 flex items-center space-x-1">
+                <button
+                  data-testid="desktop-notifications-button"
+                  onClick={() => dispatch(toggleNotificationHistory())}
+                  aria-label="View notification history"
+                  className="relative p-2 text-[#C4B5FD] hover:bg-gray-800/50 rounded transition-colors"
+                  title="Notification history"
+                >
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span
+                      data-testid="desktop-unread-badge"
+                      className="absolute top-1 right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-purple-500 text-[9px] font-bold text-white"
+                    >
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
                 <button
                   onClick={toggleSidebar}
                   className="p-2 text-[#C4B5FD] hover:bg-gray-800/50 rounded transition-colors"
@@ -298,8 +328,12 @@ export function ChatLayout({ children }: ChatLayoutProps) {
           <div className="px-4 py-4">
             <Button
               onClick={handleNewChat}
+              aria-current={isNavItemActive("/chat") ? "page" : undefined}
               className={cn(
-                "w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-medium py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl",
+                "w-full font-medium py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl",
+                isNavItemActive("/chat")
+                  ? "bg-purple-500 hover:bg-purple-500 text-white shadow-purple-500/30"
+                  : "bg-[#7C3AED] hover:bg-[#6D28D9] text-white",
                 sidebarCollapsed ? "px-3" : "px-4",
               )}
             >
@@ -396,24 +430,39 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                   ))}
               </button>
 
-                {/* Profile Menu Dropdown */}
-                {profileMenuOpen && !sidebarCollapsed && (
-                  <div className="absolute bottom-full left-0 right-0 mb-2 bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
-                    {profileMenuItems.map((item) => {
-                      return (
-                        <button
-                          key={item.name}
-                          onClick={() => handleNavigation(item.href)}
-                          className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-700/50 transition-all duration-200"
-                        >
-                          <span>{item.name}</span>
-                        </button>
-                      );
-                    })}
-                    <div className="border-t border-gray-700">
-                      <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-red-400 hover:bg-red-900/20 transition-all duration-200"
+{/* Profile Menu Dropdown */}
+{profileMenuOpen && !sidebarCollapsed && (
+  <div className="absolute bottom-full left-0 right-0 mb-2 bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
+    {profileMenuItems.map((item) => {
+      const active = isNavItemActive(item.href);
+
+      return (
+        <button
+          key={item.name}
+          onClick={() => handleNavigation(item.href)}
+          aria-current={active ? "page" : undefined}
+          className={cn(
+            "w-full flex items-center space-x-3 px-4 py-3 text-sm transition-all duration-200",
+            active
+              ? "bg-purple-700/40 text-white font-medium border-l-2 border-purple-400"
+              : "text-gray-200 hover:bg-gray-700/50",
+          )}
+        >
+          <span>{item.name}</span>
+        </button>
+      );
+    })}
+
+    <div className="border-t border-gray-700">
+      <button
+        onClick={handleLogout}
+        className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-red-400 hover:bg-red-900/20 transition-all duration-200"
+      >
+        {/* Preserve the existing logout button contents here */}
+      </button>
+    </div>
+  </div>
+)}
                       >
                         <span>Sign Out</span>
                       </button>
