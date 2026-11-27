@@ -299,6 +299,7 @@ export interface StellarTransaction {
   fee_charged: string;
   operation_count: number;
   successful: boolean;
+  status?: 'success' | 'pending' | 'failed';
   operations: StellarOperation[];
   /**
    * Memo value attached to the transaction, as returned by Horizon.
@@ -723,6 +724,10 @@ export interface ModalProps {
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
   className?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm?: () => void;
+  danger?: boolean;
 }
 
 export interface CardProps {

@@ -1,12 +1,21 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useCallback, useState, ReactNode } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  ReactNode,
+} from 'react';
 import { Socket } from 'socket.io-client';
 import {
   SocketManager,
   SocketConfig,
   initializeSocketManager,
 } from '@/services/socketManager';
+import { SocketReconnectGate } from '@/services/socketConnectivity';
 import {
   INITIAL_SOCKET_CONNECTION_STATE,
   isSocketConnected,
@@ -38,7 +47,17 @@ interface SocketProviderProps {
   autoConnect?: boolean;
 }
 
-export function SocketProvider({ children, config, configKey, autoConnect = true }: SocketProviderProps) {
+type OwnedListener = {
+  event: string;
+  callback: (...args: unknown[]) => void;
+};
+
+export function SocketProvider({
+  children,
+  config,
+  configKey,
+  autoConnect = true,
+}: SocketProviderProps) {
   const [socketManager, setSocketManager] = useState<SocketManager | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connectionState, setConnectionState] = useState<SocketConnectionState>(
@@ -48,8 +67,29 @@ export function SocketProvider({ children, config, configKey, autoConnect = true
   // Derived from the single shared state, never tracked separately (#279).
   const isConnected = isSocketConnected(connectionState);
 
+  // The manager is a singleton, so a new config object on every render must not
+  // tear down listeners registered by children. Only configKey/autoConnect
+  // intentionally re-bind the provider (#541).
+  const configRef = useRef(config);
+  configRef.current = config;
+  const ownedListeners = useRef<OwnedListener[]>([]);
+
+  const rememberListener = useCallback(
+    (event: string, callback: (...args: unknown[]) => void) => {
+      const listeners = ownedListeners.current;
+      if (
+        !listeners.some(
+          (entry) => entry.event === event && entry.callback === callback,
+        )
+      ) {
+        listeners.push({ event, callback });
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
-    const manager = initializeSocketManager(config);
+    const manager = initializeSocketManager(configRef.current);
     setSocketManager(manager);
     const unsubscribeState = manager.onStateChange((state, attempt) => {
       setConnectionState(state);
@@ -63,9 +103,45 @@ export function SocketProvider({ children, config, configKey, autoConnect = true
 
     return () => {
       unsubscribeState();
+      // Remove handlers registered through this provider before closing the
+      // socket. Without this, late socket events can still call unmounted UI.
+      for (const { event, callback } of ownedListeners.current) {
+        manager.off(event, callback);
+      }
+      ownedListeners.current = [];
       manager.disconnect();
     };
-  }, [config, configKey, autoConnect]);
+  }, [configKey, autoConnect]);
+
+  // Socket.io retries on its own even without a network. Pause those attempts
+  // while offline and allow only one resume attempt when connectivity returns (#539).
+  useEffect(() => {
+    if (!socketManager) return;
+
+    const gate = new SocketReconnectGate({
+      isOnline: () => navigator.onLine,
+      onPause: () => {
+        socketManager.disconnect();
+        setSocket(null);
+      },
+    });
+
+    const handleOffline = () => gate.handleOffline();
+    const handleOnline = () => {
+      gate.handleOnline();
+      if (gate.takeAttempt()) {
+        socketManager.retry();
+        setSocket(socketManager.getSocket());
+      }
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [socketManager]);
 
   const connect = useCallback(() => {
     if (socketManager) {
@@ -74,35 +150,53 @@ export function SocketProvider({ children, config, configKey, autoConnect = true
     }
   }, [socketManager]);
 
-  const retry = () => {
+  const retry = useCallback(() => {
     if (socketManager) {
       socketManager.retry();
       setSocket(socketManager.getSocket());
     }
-  };
+  }, [socketManager]);
 
-  const disconnect = () => {
+  const disconnect = useCallback(() => {
     if (socketManager) {
       socketManager.disconnect();
       setSocket(null);
     }
-  };
+  }, [socketManager]);
 
-  const emit = (event: string, data?: unknown): boolean => {
-    return socketManager?.emit(event, data) ?? false;
-  };
+  const emit = useCallback(
+    (event: string, data?: unknown): boolean =>
+      socketManager?.emit(event, data) ?? false,
+    [socketManager],
+  );
 
-  const on = (event: string, callback: (...args: unknown[]) => void) => {
-    socketManager?.on(event, callback);
-  };
+  const on = useCallback(
+    (event: string, callback: (...args: unknown[]) => void) => {
+      socketManager?.on(event, callback);
+      rememberListener(event, callback);
+    },
+    [socketManager, rememberListener],
+  );
 
-  const off = (event: string, callback?: (...args: unknown[]) => void) => {
-    socketManager?.off(event, callback);
-  };
+  const off = useCallback(
+    (event: string, callback?: (...args: unknown[]) => void) => {
+      socketManager?.off(event, callback);
+      ownedListeners.current = ownedListeners.current.filter(
+        (entry) =>
+          entry.event !== event ||
+          (callback !== undefined && entry.callback !== callback),
+      );
+    },
+    [socketManager],
+  );
 
-  const once = (event: string, callback: (...args: unknown[]) => void) => {
-    socketManager?.once(event, callback);
-  };
+  const once = useCallback(
+    (event: string, callback: (...args: unknown[]) => void) => {
+      socketManager?.once(event, callback);
+      rememberListener(event, callback);
+    },
+    [socketManager, rememberListener],
+  );
 
   const value: SocketContextType = {
     socket,

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers/Providers";
 import { OfflineServiceWorker } from "@/components/providers/OfflineServiceWorker";
 import { SkipLink } from "@/components/layout/SkipLink";
+import { LANGUAGE_INIT_SCRIPT } from "@/lib/i18n/languagePreference";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 const manrope = Manrope({
@@ -30,9 +31,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // suppressHydrationWarning: THEME_INIT_SCRIPT sets the theme class before React hydrates (#296)
+    // suppressHydrationWarning: LANGUAGE_INIT_SCRIPT sets lang/dir (#291) and THEME_INIT_SCRIPT
+    // sets the theme class (#296) before React hydrates
     <html lang="en" dir="ltr" className={`${manrope.variable} h-full`} suppressHydrationWarning>
       <head>
+        {/* Apply the stored language and text direction before page content renders (#291) */}
+        <script dangerouslySetInnerHTML={{ __html: LANGUAGE_INIT_SCRIPT }} />
         {/* Apply the saved/system theme before the first paint, avoiding a flash (#296) */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>

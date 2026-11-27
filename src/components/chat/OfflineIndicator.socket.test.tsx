@@ -100,6 +100,20 @@ describe('OfflineIndicator socket status', () => {
     expect(screen.getByText(/network actions are paused/)).toBeInTheDocument();
   });
 
+  it('links to the offline guidance route only while offline (#553)', () => {
+    withSocket('connected');
+    const online = render(<OfflineIndicator />);
+    expect(screen.queryByRole('link', { name: 'What works offline' })).toBeNull();
+    online.unmount();
+
+    chat.isOnline = false;
+    render(<OfflineIndicator />);
+    expect(screen.getByRole('link', { name: 'What works offline' })).toHaveAttribute(
+      'href',
+      '/offline',
+    );
+  });
+
   it('describes every visible state and none for idle or connected', () => {
     expect(describeSocketState('idle')).toBeNull();
     expect(describeSocketState('connected')).toBeNull();

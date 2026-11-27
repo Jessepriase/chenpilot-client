@@ -117,6 +117,15 @@ export const STORAGE_INVENTORY: readonly StorageKeyInfo[] = [
     contents: 'Must never hold MFA recovery codes; also cleared from sessionStorage',
   },
   {
+    key: 'notification_history',
+    area: 'localStorage',
+    owner: 'src/store/slices/uiSlice.ts',
+    lifetime: 'Until logout or user clear',
+    userScoped: true,
+    sensitivity: 'personal',
+    contents: 'Non-sensitive notification history metadata (transaction outcomes, agent status events)',
+  },
+  {
     key: 'theme',
     area: 'localStorage',
     owner: 'src/store/slices/uiSlice.ts, src/components/providers/ThemeProvider.tsx',
@@ -124,6 +133,15 @@ export const STORAGE_INVENTORY: readonly StorageKeyInfo[] = [
     userScoped: false,
     sensitivity: 'preference',
     contents: 'light | dark',
+  },
+  {
+    key: 'language_by_user',
+    area: 'localStorage',
+    owner: 'src/lib/i18n/languagePreference.ts',
+    lifetime: 'Persistent device preference',
+    userScoped: false,
+    sensitivity: 'preference',
+    contents: 'Map of user id to chosen UI language, so each user keeps their own (#291)',
   },
   {
     key: 'translation_language',

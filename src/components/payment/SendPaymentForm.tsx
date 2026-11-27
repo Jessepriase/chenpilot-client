@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { sendPaymentSchema, validateSendPayment, sanitizePaymentInput } from '@/utils/validation';
+import { sendPaymentSchema, validateSendPayment, sanitizePaymentInput, getPaymentFailureMessage } from '@/utils/validation';
 import { SendPaymentRequest, ContactSelection } from '@/types';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -13,18 +13,17 @@ import {
   Send,
   User,
   X,
-  ChevronDown,
   Loader2,
   AlertTriangle,
-  CheckCircle,
-  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import toast from 'react-hot-toast';
+import { useT } from "@/lib/i18n/useT";
+import { LiveAnnouncer, SILENT_TOAST, type Announcement } from '@/components/ui/LiveAnnouncer';
 
 interface SendPaymentFormProps {
   onSubmit: (data: SendPaymentRequest) => Promise<void>;
-  contacts: any[];
+  contacts: ContactSelection[];
   isLoading?: boolean;
   defaultTokenType?: 'XLM' | 'USDC' | 'USDT' | 'BTC' | 'ETH' | 'AQUA';
 }
@@ -32,13 +31,16 @@ interface SendPaymentFormProps {
 export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
   onSubmit,
   contacts,
-  isOnline,
   isLoading = false,
   defaultTokenType = 'XLM',
 }) => {
   const [selectedContact, setSelectedContact] = useState<ContactSelection | null>(null);
   const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Translated workflow strings (#292, #295)
+  const { t, tv, language } = useT();
+  // Screen-reader status for submission (#307)
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
   const {
     register,
@@ -122,12 +124,13 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
     // acknowledging.  This is a UX safeguard only — the backend is the
     // authoritative check.
     if (isSelfTransfer && !selfTransferAcknowledged) {
-      toast.error('Please read and acknowledge the self-transfer warning before sending.');
+      toast.error(tv('Please read and acknowledge the self-transfer warning before sending.'));
       return;
     }
 
     try {
       setIsSubmitting(true);
+      setAnnouncement({ text: 'Sending payment…', tone: 'polite' });
       
       // Sanitize input
       const sanitizedData = sanitizePaymentInput(data);
@@ -138,14 +141,16 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
       }
       
       // Validate again (defensive programming)
-      const validation = validateSendPayment(sanitizedData);
+      const validation = validateSendPayment(sanitizedData, language);
       if (!validation.isValid) {
-        validation.errors.forEach((error) => toast.error(error));
+        validation.errors.forEach((error) => toast.error(tv(error), SILENT_TOAST));
+        setAnnouncement({ text: `Payment not sent: ${tv(validation.errors[0]) ?? 'invalid details'}`, tone: 'assertive' });
         return;
       }
       
       await onSubmit(sanitizedData);
       
+      setAnnouncement({ text: 'Payment sent.', tone: 'polite' });
       // Reset form on success
       reset();
       setSelectedContact(null);
@@ -153,26 +158,18 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
       setSelfTransferAcknowledged(false);
     } catch (error: unknown) {
       console.error('Payment submission error:', error);
-      toast.error(error?.message || 'Failed to send payment');
+      const rawMessage = getPaymentFailureMessage(error, language);
+      const message = tv(rawMessage);
+      toast.error(message, SILENT_TOAST);
+      setAnnouncement({ text: `Payment failed: ${message}`, tone: 'assertive' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const getContactDisplayName = () => {
-    if (selectedContact) {
-      return (
-        <div className="flex items-center space-x-2">
-          <User className="h-4 w-4 text-blue-400" />
-          <span className="text-blue-400">{selectedContact.name}</span>
-        </div>
-      );
-    }
-    return 'Select from contacts';
-  };
-
   return (
     <div className="space-y-6">
+      <LiveAnnouncer announcement={announcement} />
       {/* Contact Selection */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-4">
@@ -184,7 +181,7 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
             className="text-blue-400 hover:text-blue-300"
           >
             <User className="h-4 w-4 mr-1" aria-hidden="true" />
-            Select Contact
+            {t("payment.selectContact")}
           </Button>
         </div>
 
@@ -219,7 +216,7 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
           </div>
         ) : (
           <div className="text-center py-4 text-gray-500 text-sm">
-            Select a contact or enter address manually
+            {t("payment.selectContactHint")}
           </div>
         )}
       </Card>
@@ -229,25 +226,14 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6" noValidate>
           {/* Recipient Address */}
           <div>
-            <label htmlFor="recipient-address" className="block text-sm font-medium text-gray-300 mb-2">
-              Recipient Address
-            </label>
-            <Input
-              id="recipient-address"
-              {...register('recipientAddress')}
-              placeholder="GABCD1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
-              className={cn(
-                'font-mono text-sm',
-                selectedContact && 'bg-blue-500/5 border-blue-500/30'
-              )}
-              disabled={!!selectedContact}
             <label
               htmlFor={recipientFieldId}
               className="block text-sm font-medium text-gray-300 mb-2"
             >
-              Recipient Address
+              {t("payment.recipientAddress")}
             </label>
             <Input
+              id={recipientFieldId}
               {...register('recipientAddress')}
               placeholder="GABCD1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
               className={cn(
@@ -262,7 +248,7 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
                 role="alert"
                 className="mt-1 text-xs text-red-400"
               >
-                {errors.recipientAddress.message}
+                {tv(errors.recipientAddress.message)}
               </p>
             )}
 
@@ -292,7 +278,7 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
                     className="rounded border-yellow-500 accent-yellow-400"
                   />
                   <span className="text-xs text-yellow-300">
-                    I intend to send to my own address and want to proceed.
+                    {t("payment.ownAddressConfirm")}
                   </span>
                 </label>
               </div>
@@ -302,9 +288,9 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
           {/* Amount */}
           <div>
             <label htmlFor="send-amount" className="block text-sm font-medium text-gray-300 mb-2">
-              Amount
+              {t("payment.amount")}
             </label>
-            <div className="flex space-x-2">
+            <div className="form-row-wrap">
               <Input
                 id="send-amount"
                 {...register('amount')}
@@ -315,10 +301,9 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
               />
               <select
                 id="token-type-select"
-                aria-label="Token Type"
                 {...register('tokenType')}
                 className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label="Token type"
+                aria-label={t("payment.tokenType")}
               >
                 {SUPPORTED_ASSETS.map((token) => (
                   <option key={token} value={token}>
@@ -329,12 +314,12 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
             </div>
             {errors.amount && (
               <p role="alert" className="mt-1 text-xs text-red-400">
-                {errors.amount.message}
+                {tv(errors.amount.message)}
               </p>
             )}
             {errors.tokenType && (
               <p role="alert" className="mt-1 text-xs text-red-400">
-                {errors.tokenType.message}
+                {tv(errors.tokenType.message)}
               </p>
             )}
           </div>
@@ -342,15 +327,14 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
           {/* Memo */}
           <div>
             <label htmlFor="memo-type-select" className="block text-sm font-medium text-gray-300 mb-2">
-              Memo (Optional)
+              {t("payment.memoOptional")}
             </label>
             <div className="space-y-2">
               <select
                 id="memo-type-select"
-                aria-label="Memo Type"
                 {...register('memoType')}
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label="Memo type"
+                aria-label={t("payment.memoType")}
               >
                 <option value="none">No Memo</option>
                 <option value="text">Text Memo</option>
@@ -361,7 +345,7 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
               {watchedMemoType !== 'none' && (
                 <Input
                   id="memo-value-input"
-                  aria-label="Memo Value"
+                  aria-label={t("payment.memoValue")}
                   {...register('memo')}
                   placeholder={
                     watchedMemoType === 'text'
@@ -380,12 +364,12 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
             </div>
             {errors.memo && (
               <p role="alert" className="mt-1 text-xs text-red-400">
-                {errors.memo.message}
+                {tv(errors.memo.message)}
               </p>
             )}
             {errors.memoType && (
               <p role="alert" className="mt-1 text-xs text-red-400">
-                {errors.memoType.message}
+                {tv(errors.memoType.message)}
               </p>
             )}
           </div>
@@ -400,14 +384,14 @@ export const SendPaymentForm: React.FC<SendPaymentFormProps> = ({
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
-                Sending...
+                {t("payment.sending")}
               </>
             ) : (
               <>
                 <Send className="h-4 w-4 mr-2" aria-hidden="true" />
-                Send Payment
+                {t("payment.sendPayment")}
                 <Send className="h-4 w-4 mr-2" />
-                Send Payment
+                {t("payment.sendPayment")}
               </>
             )}
           </Button>

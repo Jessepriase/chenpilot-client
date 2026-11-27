@@ -6,7 +6,6 @@ import {
   logger,
   setCorrelationIdHeader,
 } from "../utils/logger";
-import { env } from '@/config/env';
 import {
   RegisterRequest,
   LoginRequest,
@@ -58,12 +57,14 @@ import {
 } from "@/utils/retryUtils";
 import { horizonFetch } from "@/utils/horizonFetch";
 import { buildPaymentIdempotencyKey } from "@/utils/paymentIdempotency";
+import type { NotificationPreferences } from "@/types/notificationPreferences";
 import {
   PaymentOutcomeUnknownError,
   isPaymentOutcomeUnknown,
 } from "@/utils/paymentOutcome";
 import {
   apiResponseSchema,
+  autoFundingStatsResponseSchema,
   balanceResponseSchema,
   contactDeleteResponseSchema,
   contactResponseEnvelopeSchema,
@@ -747,6 +748,27 @@ export class ApiService {
   }
 
   /**
+   * Saved notification preferences for the current user (#301).
+   * Proposed contract: `GET /users/me/notification-preferences` →
+   * `{ "transactions": boolean, "chat": boolean }`.
+   *
+   * @throws {AxiosError} 404/501 when the backend does not support preferences yet.
+   */
+  async getNotificationPreferences(): Promise<NotificationPreferences> {
+    const response = await this.api.get<NotificationPreferences>("/users/me/notification-preferences");
+    return response.data;
+  }
+
+  /**
+   * Save notification preferences (#301). Proposed: `PUT /users/me/notification-preferences`
+   * with the full object; responds with the saved object.
+   */
+  async updateNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences> {
+    const response = await this.api.put<NotificationPreferences>("/users/me/notification-preferences", preferences);
+    return response.data;
+  }
+
+  /**
    * Translate a message on demand (#83).
    * Proposed contract: `POST /translate` `{ text, targetLanguage }` →
    * `{ translatedText, detectedLanguage? }`.
@@ -885,15 +907,15 @@ export class ApiService {
       averageAmount: string;
     }>
   > {
-    const response = await this.api.get<
-      ApiResponse<{
-        totalFunded: number;
-        totalAccounts: number;
-        averageAmount: string;
-      }>
-    >("/auth/funding/auto-funding-stats");
+    const response = await this.api.get<unknown>(
+      "/auth/funding/auto-funding-stats",
+    );
 
-    return response.data;
+    return parseBackendResponse(
+      "GET /auth/funding/auto-funding-stats",
+      autoFundingStatsResponseSchema,
+      response.data,
+    );
   }
 
   async getFundedAccountBalance(): Promise<

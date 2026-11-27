@@ -236,4 +236,55 @@ describe('TransactionToastListener (#235)', () => {
     expect(h.toastError).not.toHaveBeenCalled();
     expect(h.dispatch).not.toHaveBeenCalled();
   });
+
+  it('records transaction events in notification history with non-sensitive metadata and /transactions route link', async () => {
+    let resolveConfirmation!: (value: unknown) => void;
+    h.fetchConfirmation.mockImplementation(
+      () => new Promise((resolve) => { resolveConfirmation = resolve; }),
+    );
+
+    mount();
+
+    act(() => {
+      h.emit('transaction:completed', { hash: 'tx12345', amount: '25', asset: 'USDC' });
+    });
+
+    expect(h.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'ui/addNotification',
+        payload: expect.objectContaining({
+          id: 'tx-tx12345',
+          category: 'transaction',
+          link: '/transactions',
+          metadata: expect.objectContaining({
+            status: 'pending',
+            transactionHash: 'tx12345',
+          }),
+        }),
+      }),
+    );
+
+    await act(async () => {
+      resolveConfirmation({ status: 'confirmed', ledger: 10 });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(h.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'ui/addNotification',
+          payload: expect.objectContaining({
+            id: 'tx-tx12345',
+            type: 'success',
+            category: 'transaction',
+            link: '/transactions',
+            metadata: expect.objectContaining({
+              status: 'confirmed',
+              transactionHash: 'tx12345',
+            }),
+          }),
+        }),
+      );
+    });
+  });
 });
